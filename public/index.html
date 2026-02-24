@@ -483,8 +483,9 @@ const ENDPOINTS = [
     items: [
       { method: 'GET', path: '/fleet/vehicles', name: '/fleet/vehicles', desc: 'List all vehicles' },
       { method: 'GET', path: '/fleet/vehicles/locations', name: '/fleet/vehicles/locations', desc: 'Current GPS locations for all vehicles' },
-      { method: 'GET', path: '/fleet/vehicles/stats', name: '/fleet/vehicles/stats', desc: 'Vehicle stats snapshot (engineState, fuelPercent, etc.)', params: { types: 'engineState' } },
-      { method: 'GET', path: '/fleet/vehicles/stats/history', name: '/fleet/vehicles/stats/history', desc: 'Historical vehicle stats (last 1h)', params: { types: 'engineState', startTime: new Date(Date.now() - 3600000).toISOString(), endTime: new Date().toISOString() } },
+      { method: 'GET', path: '/fleet/vehicles/stats', name: '/fleet/vehicles/stats', desc: 'Vehicle stats snapshot', params: { types: 'engineStates' } },
+      { method: 'GET', path: '/fleet/vehicles/stats/feed', name: '/fleet/vehicles/stats/feed', desc: 'Vehicle stats feed (polling)', params: { types: 'engineStates' } },
+      { method: 'GET', path: '/fleet/vehicles/stats/history', name: '/fleet/vehicles/stats/history', desc: 'Historical vehicle stats', params: { types: 'engineStates', startTime: new Date(Date.now() - 3600000).toISOString(), endTime: new Date().toISOString() } },
     ]
   },
   {
@@ -492,8 +493,8 @@ const ENDPOINTS = [
     items: [
       { method: 'GET', path: '/trailers', name: '/trailers', desc: 'List all trailers' },
       { method: 'GET', path: '/trailers/locations', name: '/trailers/locations', desc: 'Current GPS locations for all trailers' },
-      { method: 'GET', path: '/trailers/stats', name: '/trailers/stats', desc: 'Trailer stats snapshot', params: { types: 'gpsOdometer' } },
-      { method: 'GET', path: '/trailers/stats/history', name: '/trailers/stats/history', desc: 'Historical trailer stats (last 1h)', params: { types: 'gpsOdometer', startTime: new Date(Date.now() - 3600000).toISOString(), endTime: new Date().toISOString() } },
+      { method: 'GET', path: '/trailers/stats', name: '/trailers/stats', desc: 'Trailer stats snapshot', params: { types: 'gpsOdometerMeters' } },
+      { method: 'GET', path: '/trailers/stats/history', name: '/trailers/stats/history', desc: 'Historical trailer stats', params: { types: 'gpsOdometerMeters', startTime: new Date(Date.now() - 3600000).toISOString(), endTime: new Date().toISOString() } },
     ]
   },
   {
@@ -506,39 +507,35 @@ const ENDPOINTS = [
   {
     category: 'Fleet — HOS',
     items: [
-      { method: 'GET', path: '/fleet/hos/logs', name: '/fleet/hos/logs', desc: 'HOS (Hours of Service) logs for all drivers' },
-      { method: 'GET', path: '/fleet/hos/daily-logs', name: '/fleet/hos/daily-logs', desc: 'Daily HOS summary logs' },
+      { method: 'GET', path: '/fleet/hos/logs', name: '/fleet/hos/logs', desc: 'HOS logs for all drivers' },
+      { method: 'GET', path: '/fleet/hos/daily-logs', name: '/fleet/hos/daily-logs', desc: 'Daily HOS summary logs', params: { startDate: new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10), endDate: new Date().toISOString().slice(0, 10) } },
       { method: 'GET', path: '/fleet/hos/clocks', name: '/fleet/hos/clocks', desc: 'Current HOS duty clocks for all drivers' },
-      { method: 'GET', path: '/fleet/hos/violations', name: '/fleet/hos/violations', desc: 'HOS violations' },
+      { method: 'GET', path: '/fleet/hos/violations', name: '/fleet/hos/violations', desc: 'HOS violations', params: { startTime: new Date(Date.now() - 7 * 86400000).toISOString(), endTime: new Date().toISOString() } },
     ]
   },
   {
     category: 'Fleet — Safety',
     items: [
-      { method: 'GET', path: '/fleet/safety-events', name: '/fleet/safety-events', desc: 'Safety events (harsh braking, speeding, etc.)' },
-      { method: 'GET', path: '/fleet/driver-efficiency', name: '/fleet/driver-efficiency', desc: 'Driver efficiency scores' },
+      { method: 'GET', path: '/fleet/safety-events', name: '/fleet/safety-events', desc: 'Safety events' },
     ]
   },
   {
-    category: 'Fleet — Trips & Routes',
+    category: 'Fleet — Trips',
     items: [
       { method: 'GET', path: '/fleet/trips', name: '/fleet/trips', desc: 'Trip history for vehicles' },
+    ]
+  },
+  {
+    category: 'Routes',
+    items: [
       { method: 'GET', path: '/routes', name: '/routes', desc: 'List all dispatch routes' },
-      { method: 'GET', path: '/route-templates', name: '/route-templates', desc: 'List all route templates' },
-      { method: 'GET', path: '/fleet/messages', name: '/fleet/messages', desc: 'List fleet messages sent to drivers' },
     ]
   },
   {
-    category: 'Fleet — IFTA',
+    category: 'Assets',
     items: [
-      { method: 'GET', path: '/fleet/ifta/summary', name: '/fleet/ifta/summary', desc: 'IFTA fuel tax mileage summary by vehicle' },
-    ]
-  },
-  {
-    category: 'Assets (unified)',
-    items: [
-      { method: 'GET', path: '/assets', name: '/assets', desc: 'List all assets (vehicles, trailers & equipment — v2 unified endpoint)' },
-      { method: 'GET', path: '/assets/locations', name: '/assets/locations', desc: 'Current GPS locations for all assets (v2)' },
+      { method: 'GET', path: '/assets', name: '/assets', desc: 'List all assets (vehicles, trailers & equipment)' },
+      { method: 'GET', path: '/assets/locations', name: '/assets/locations', desc: 'Current GPS locations for all assets' },
     ]
   },
   {
@@ -546,8 +543,8 @@ const ENDPOINTS = [
     items: [
       { method: 'GET', path: '/equipment', name: '/equipment', desc: 'List all equipment' },
       { method: 'GET', path: '/equipment/locations', name: '/equipment/locations', desc: 'Current locations of all equipment' },
-      { method: 'GET', path: '/equipment/stats', name: '/equipment/stats', desc: 'Equipment stats snapshot', params: { types: 'engineState' } },
-      { method: 'GET', path: '/equipment/stats/history', name: '/equipment/stats/history', desc: 'Historical equipment stats (last 1h)', params: { types: 'engineState', startTime: new Date(Date.now() - 3600000).toISOString(), endTime: new Date().toISOString() } },
+      { method: 'GET', path: '/equipment/stats', name: '/equipment/stats', desc: 'Equipment stats snapshot', params: { types: 'engineStates' } },
+      { method: 'GET', path: '/equipment/stats/history', name: '/equipment/stats/history', desc: 'Historical equipment stats', params: { types: 'engineStates', startTime: new Date(Date.now() - 3600000).toISOString(), endTime: new Date().toISOString() } },
     ]
   },
   {
@@ -559,34 +556,19 @@ const ENDPOINTS = [
     ]
   },
   {
-    category: 'Sensors',
-    items: [
-      { method: 'GET', path: '/sensors', name: '/sensors', desc: 'List all sensors' },
-      { method: 'GET', path: '/sensors/history', name: '/sensors/history', desc: 'Historical sensor data (last 1h)', params: { startTime: new Date(Date.now() - 3600000).toISOString(), endTime: new Date().toISOString() } },
-    ]
-  },
-  {
     category: 'Documents & DVIR',
     items: [
-      { method: 'GET', path: '/fleet/dvirs', name: '/fleet/dvirs', desc: 'Driver Vehicle Inspection Reports (DVIRs)' },
-      { method: 'GET', path: '/defects', name: '/defects', desc: 'Vehicle/equipment defects from DVIRs' },
-      { method: 'GET', path: '/fleet/documents', name: '/fleet/documents', desc: 'Fleet documents submitted by drivers' },
+      { method: 'GET', path: '/fleet/dvirs', name: '/fleet/dvirs', desc: 'Driver Vehicle Inspection Reports' },
+      { method: 'GET', path: '/defects', name: '/defects', desc: 'DVIR defects' },
+      { method: 'GET', path: '/fleet/documents', name: '/fleet/documents', desc: 'Fleet documents submitted by drivers', params: { startTime: new Date(Date.now() - 30 * 86400000).toISOString(), endTime: new Date().toISOString() } },
       { method: 'GET', path: '/fleet/document-types', name: '/fleet/document-types', desc: 'Available document type templates' },
     ]
   },
   {
-    category: 'Alerts & Issues',
+    category: 'Alerts',
     items: [
-      { method: 'GET', path: '/alerts/instances', name: '/alerts/instances', desc: 'Alert instances (triggered alerts)' },
       { method: 'GET', path: '/alerts/configurations', name: '/alerts/configurations', desc: 'Alert configuration rules' },
-    ]
-  },
-  {
-    category: 'Reporting',
-    items: [
-      { method: 'GET', path: '/reports/drivers/speed', name: '/reports/drivers/speed', desc: 'Speed reports for drivers' },
-      { method: 'GET', path: '/reports/vehicles/speed-percent-of-time', name: '/reports/vehicles/speed', desc: 'Vehicle speeding % of time report' },
-      { method: 'GET', path: '/reports/vehicles/fuel-energy', name: '/reports/vehicles/fuel-energy', desc: 'Vehicle fuel & energy consumption report' },
+      { method: 'GET', path: '/alerts/incidents', name: '/alerts/incidents', desc: 'Alert incidents' },
     ]
   },
 ];
@@ -678,13 +660,17 @@ function renderParams(ep) {
     const input = document.createElement('input');
     input.dataset.param = key;
 
-    const isDate = key.toLowerCase().includes('time') || key.toLowerCase().includes('date');
-    if (isDate) {
+    const isDateTime = key.toLowerCase().includes('time');
+    const isDateOnly = !isDateTime && key.toLowerCase().includes('date');
+    if (isDateTime) {
       input.type = 'datetime-local';
       input.style.minWidth = '210px';
-      // Convert ISO string to datetime-local format
       const d = new Date(value);
       input.value = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    } else if (isDateOnly) {
+      input.type = 'date';
+      input.style.minWidth = '160px';
+      input.value = value;
     } else {
       input.type = 'text';
       input.value = value;
@@ -709,6 +695,8 @@ function getParamValues() {
     let val = input.value;
     if (input.type === 'datetime-local' && val) {
       val = new Date(val).toISOString();
+    } else if (input.type === 'date' && val) {
+      // Keep as YYYY-MM-DD
     }
     if (val) params[input.dataset.param] = val;
   });

@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Holcim — Samsara API Explorer</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f1117;
+      --sidebar-bg: #161b27;
+      --sidebar-border: #1e2535;
+      --header-bg: #161b27;
+      --card-bg: #1a2030;
+      --card-border: #232c3d;
+      --accent: #3b82f6;
+      --accent-hover: #60a5fa;
+      --accent-dim: rgba(59,130,246,0.12);
+      --green: #22c55e;
+      --red: #ef4444;
+      --yellow: #f59e0b;
+      --text: #e2e8f0;
+      --text-dim: #64748b;
+      --text-muted: #94a3b8;
+      --cat-text: #7c8fa8;
+      --json-key: #93c5fd;
+      --json-str: #86efac;
+      --json-num: #fcd34d;
+      --json-bool: #f9a8d4;
+      --json-null: #94a3b8;
+      --scrollbar: #232c3d;
+      --scrollbar-thumb: #334155;
+      --radius: 8px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* -- Header -- */
+    header {
+      background: var(--header-bg);
+      border-bottom: 1px solid var(--sidebar-border);
+      padding: 0 24px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-shrink: 0;
+      z-index: 10;
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .logo-icon {
+      width: 32px; height: 32px;
+      background: var(--accent);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: -.5px;
+    }
+    .logo-text { font-weight: 700; font-size: 15px; letter-spacing: -.3px; }
+    .logo-sub { font-size: 12px; color: var(--text-dim); margin-left: 4px; font-weight: 400; }
+    header .spacer { flex: 1; }
+    .base-url-badge {
+      font-size: 11px;
+      color: var(--text-dim);
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-family: 'Consolas', monospace;
+    }
+
+    /* -- Layout -- */
+    .layout {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* -- Sidebar -- */
+    aside {
+      width: 280px;
+      background: var(--sidebar-bg);
+      border-right: 1px solid var(--sidebar-border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .search-wrap {
+      padding: 14px 14px 10px;
+      border-bottom: 1px solid var(--sidebar-border);
+    }
+    .search-wrap input {
+      width: 100%;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 13px;
+      padding: 7px 10px 7px 30px;
+      outline: none;
+      transition: border-color .15s;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748b' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-size: 14px;
+      background-position: 9px center;
+    }
+    .search-wrap input:focus { border-color: var(--accent); }
+    .search-wrap input::placeholder { color: var(--text-dim); }
+
+    .endpoint-list {
+      overflow-y: auto;
+      flex: 1;
+      padding: 8px 0 16px;
+    }
+    .endpoint-list::-webkit-scrollbar { width: 5px; }
+    .endpoint-list::-webkit-scrollbar-track { background: transparent; }
+    .endpoint-list::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 4px; }
+
+    .category {
+      margin-bottom: 2px;
+    }
+    .category-header {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 6px 14px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .category-header:hover { background: rgba(255,255,255,.03); }
+    .cat-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .8px;
+      color: var(--cat-text);
+      flex: 1;
+    }
+    .cat-chevron {
+      font-size: 10px;
+      color: var(--text-dim);
+      transition: transform .2s;
+    }
+    .category.collapsed .cat-chevron { transform: rotate(-90deg); }
+    .category.collapsed .category-items { display: none; }
+
+    .endpoint-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 7px 14px 7px 24px;
+      cursor: pointer;
+      border-radius: 0;
+      transition: background .1s;
+      border-left: 2px solid transparent;
+    }
+    .endpoint-item:hover { background: rgba(255,255,255,.04); }
+    .endpoint-item.active {
+      background: var(--accent-dim);
+      border-left-color: var(--accent);
+    }
+    .method-badge {
+      font-size: 9px;
+      font-weight: 700;
+      padding: 2px 5px;
+      border-radius: 3px;
+      background: rgba(59,130,246,.18);
+      color: var(--accent-hover);
+      letter-spacing: .4px;
+      flex-shrink: 0;
+    }
+    .ep-name {
+      font-size: 12.5px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .endpoint-item.active .ep-name { color: var(--text); }
+
+    /* -- Main -- */
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .request-bar {
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--sidebar-border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--header-bg);
+      flex-shrink: 0;
+    }
+    .url-display {
+      flex: 1;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      padding: 9px 14px;
+      font-family: 'Consolas', monospace;
+      font-size: 13px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      overflow: hidden;
+    }
+    .url-base { color: var(--text-dim); white-space: nowrap; flex-shrink: 0; }
+    .url-path { color: var(--accent-hover); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* -- Params bar -- */
+    .params-bar {
+      display: none;
+      padding: 12px 24px;
+      background: var(--header-bg);
+      border-bottom: 1px solid var(--sidebar-border);
+      flex-shrink: 0;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      gap: 12px;
+    }
+    .params-bar.visible { display: flex; }
+    .param-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .param-group label {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      color: var(--text-dim);
+    }
+    .param-group input {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 5px;
+      color: var(--text);
+      font-size: 12px;
+      font-family: 'Consolas', monospace;
+      padding: 6px 10px;
+      outline: none;
+      min-width: 160px;
+      transition: border-color .15s;
+    }
+    .param-group input:focus { border-color: var(--accent); }
+    .resend-btn {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      padding: 7px 16px;
+      border-radius: 5px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .15s;
+      white-space: nowrap;
+      align-self: flex-end;
+    }
+    .resend-btn:hover { background: var(--accent-hover); }
+
+    /* -- Response area -- */
+    .response-area {
+      flex: 1;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Loading indicator */
+    .loading-bar {
+      height: 2px;
+      background: var(--accent);
+      animation: loading-pulse 1s ease-in-out infinite;
+      display: none;
+      flex-shrink: 0;
+    }
+    .loading-bar.visible { display: block; }
+    @keyframes loading-pulse {
+      0%, 100% { opacity: .3; }
+      50% { opacity: 1; }
+    }
+
+    /* Empty state */
+    .empty-state {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-dim);
+      gap: 12px;
+    }
+    .empty-title { font-size: 16px; font-weight: 600; color: var(--text-muted); }
+    .empty-sub { font-size: 13px; }
+
+    /* Response meta bar */
+    .response-meta {
+      display: none;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 24px;
+      background: var(--header-bg);
+      border-bottom: 1px solid var(--sidebar-border);
+      flex-shrink: 0;
+    }
+    .response-meta.visible { display: flex; }
+    .status-badge {
+      font-size: 12px;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 20px;
+    }
+    .status-badge.ok { background: rgba(34,197,94,.15); color: var(--green); }
+    .status-badge.err { background: rgba(239,68,68,.15); color: var(--red); }
+    .status-badge.warn { background: rgba(245,158,11,.15); color: var(--yellow); }
+    .meta-text { font-size: 12px; color: var(--text-dim); }
+    .meta-spacer { flex: 1; }
+    .copy-btn {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      color: var(--text-muted);
+      padding: 5px 12px;
+      border-radius: 5px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: border-color .15s, color .15s;
+      display: flex; align-items: center; gap: 5px;
+    }
+    .copy-btn:hover { border-color: var(--accent); color: var(--accent-hover); }
+
+    /* Response description */
+    .endpoint-desc {
+      padding: 14px 24px 0;
+      font-size: 13px;
+      color: var(--text-dim);
+      flex-shrink: 0;
+      display: none;
+    }
+    .endpoint-desc.visible { display: block; }
+    .endpoint-desc strong { color: var(--text-muted); margin-right: 6px; }
+
+    /* JSON output */
+    .json-wrap {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 24px 24px;
+    }
+    .json-wrap::-webkit-scrollbar { width: 7px; }
+    .json-wrap::-webkit-scrollbar-track { background: transparent; }
+    .json-wrap::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 4px; }
+
+    pre#json-output {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      padding: 20px;
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 12.5px;
+      line-height: 1.65;
+      white-space: pre-wrap;
+      word-break: break-all;
+      display: none;
+    }
+    pre#json-output.visible { display: block; }
+
+    /* JSON syntax highlight */
+    .j-key    { color: var(--json-key); }
+    .j-str    { color: var(--json-str); }
+    .j-num    { color: var(--json-num); }
+    .j-bool   { color: var(--json-bool); }
+    .j-null   { color: var(--json-null); }
+    .j-brace  { color: #94a3b8; }
+
+    /* Scrollbar global */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 4px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">HF</div>
+    <span class="logo-text">Holcim Fleet <span class="logo-sub">/ Samsara API Explorer</span></span>
+  </div>
+  <div class="spacer"></div>
+  <div class="base-url-badge">api.eu.samsara.com</div>
+</header>
+
+<div class="layout">
+
+  <!-- Sidebar -->
+  <aside>
+    <div class="search-wrap">
+      <input type="text" id="search" placeholder="Search endpoints..." autocomplete="off" />
+    </div>
+    <div class="endpoint-list" id="endpoint-list"></div>
+  </aside>
+
+  <!-- Main -->
+  <main>
+    <div class="request-bar">
+      <div class="url-display">
+        <span class="url-base">GET</span>
+        <span class="url-base" style="color:var(--text-dim); margin-left:6px;">https://api.eu.samsara.com</span>
+        <span class="url-path" id="url-path"> — select an endpoint</span>
+      </div>
+    </div>
+
+    <div class="params-bar" id="params-bar"></div>
+
+    <div class="response-area">
+      <div class="loading-bar" id="loading-bar"></div>
+
+      <div class="empty-state" id="empty-state">
+        <div class="empty-title">No request yet</div>
+        <div class="empty-sub">Select an endpoint from the sidebar</div>
+      </div>
+
+      <div class="response-meta" id="response-meta">
+        <span class="status-badge" id="status-badge"></span>
+        <span class="meta-text" id="meta-duration"></span>
+        <span class="meta-text" id="meta-endpoint"></span>
+        <div class="meta-spacer"></div>
+        <button class="copy-btn" id="copy-btn">Copy JSON</button>
+      </div>
+
+      <div class="endpoint-desc" id="endpoint-desc">
+        <strong id="ep-desc-name"></strong><span id="ep-desc-text"></span>
+      </div>
+
+      <div class="json-wrap">
+        <pre id="json-output"></pre>
+      </div>
+    </div>
+  </main>
+
+</div>
+
+<script>
+// -- Endpoint definitions --
+const ENDPOINTS = [
+  {
+    category: 'Organization',
+    items: [
+      { method: 'GET', path: '/me', name: '/me', desc: 'Current organization and user info' },
+      { method: 'GET', path: '/users', name: '/users', desc: 'List all users in the organization' },
+      { method: 'GET', path: '/user-roles', name: '/user-roles', desc: 'List all user roles' },
+      { method: 'GET', path: '/contacts', name: '/contacts', desc: 'List all contacts' },
+      { method: 'GET', path: '/tags', name: '/tags', desc: 'List all tags' },
+      { method: 'GET', path: '/addresses', name: '/addresses', desc: 'List all addresses / geofences' },
+      { method: 'GET', path: '/attributes', name: '/attributes', desc: 'List all attributes by entity type', params: { entityType: 'Vehicle' } },
+      { method: 'GET', path: '/gateways', name: '/gateways', desc: 'List all gateways (telematics devices)' },
+    ]
+  },
+  {
+    category: 'Fleet — Vehicles',
+    items: [
+      { method: 'GET', path: '/fleet/vehicles', name: '/fleet/vehicles', desc: 'List all vehicles' },
+      { method: 'GET', path: '/fleet/vehicles/locations', name: '/fleet/vehicles/locations', desc: 'Current GPS locations for all vehicles' },
+      { method: 'GET', path: '/fleet/vehicles/stats', name: '/fleet/vehicles/stats', desc: 'Vehicle stats snapshot (engineState, fuelPercent, etc.)', params: { types: 'engineState' } },
+      { method: 'GET', path: '/fleet/vehicles/stats/history', name: '/fleet/vehicles/stats/history', desc: 'Historical vehicle stats (last 1h)', params: { types: 'engineState', startTime: new Date(Date.now() - 3600000).toISOString(), endTime: new Date().toISOString() } },
+    ]
+  },
+  {
+    category: 'Fleet — Trailers',
+    items: [
+      { method: 'GET', path: '/trailers', name: '/trailers', desc: 'List all trailers' },
+      { method: 'GET', path: '/trailers/locations', name: '/trailers/locations', desc: 'Current GPS locations for all trailers' },
+      { method: 'GET', path: '/trailers/stats', name: '/trailers/stats', desc: 'Trailer stats snapshot', params: { types: 'gpsOdometer' } },
+      { method: 'GET', path: '/trailers/stats/history', name: '/trailers/stats/history', desc: 'Historical trailer stats (last 1h)', params: { types: 'gpsOdometer', startTime: new Date(Date.now() - 3600000).toISOString(), endTime: new Date().toISOString() } },
+    ]
+  },
+  {
+    category: 'Fleet — Drivers',
+    items: [
+      { method: 'GET', path: '/fleet/drivers', name: '/fleet/drivers', desc: 'List all drivers' },
+      { method: 'GET', path: '/fleet/drivers/locations', name: '/fleet/drivers/locations', desc: 'Current locations of drivers' },
+    ]
+  },
+  {
+    category: 'Fleet — HOS',
+    items: [
+      { method: 'GET', path: '/fleet/hos/logs', name: '/fleet/hos/logs', desc: 'HOS (Hours of Service) logs for all drivers' },
+      { method: 'GET', path: '/fleet/hos/daily-logs', name: '/fleet/hos/daily-logs', desc: 'Daily HOS summary logs' },
+      { method: 'GET', path: '/fleet/hos/clocks', name: '/fleet/hos/clocks', desc: 'Current HOS duty clocks for all drivers' },
+      { method: 'GET', path: '/fleet/hos/violations', name: '/fleet/hos/violations', desc: 'HOS violations' },
+    ]
+  },
+  {
+    category: 'Fleet — Safety',
+    items: [
+      { method: 'GET', path: '/fleet/safety-events', name: '/fleet/safety-events', desc: 'Safety events (harsh braking, speeding, etc.)' },
+      { method: 'GET', path: '/fleet/driver-efficiency', name: '/fleet/driver-efficiency', desc: 'Driver efficiency scores' },
+    ]
+  },
+  {
+    category: 'Fleet — Trips & Routes',
+    items: [
+      { method: 'GET', path: '/fleet/trips', name: '/fleet/trips', desc: 'Trip history for vehicles' },
+      { method: 'GET', path: '/routes', name: '/routes', desc: 'List all dispatch routes' },
+      { method: 'GET', path: '/route-templates', name: '/route-templates', desc: 'List all route templates' },
+      { method: 'GET', path: '/fleet/messages', name: '/fleet/messages', desc: 'List fleet messages sent to drivers' },
+    ]
+  },
+  {
+    category: 'Fleet — IFTA',
+    items: [
+      { method: 'GET', path: '/fleet/ifta/summary', name: '/fleet/ifta/summary', desc: 'IFTA fuel tax mileage summary by vehicle' },
+    ]
+  },
+  {
+    category: 'Assets (unified)',
+    items: [
+      { method: 'GET', path: '/assets', name: '/assets', desc: 'List all assets (vehicles, trailers & equipment — v2 unified endpoint)' },
+      { method: 'GET', path: '/assets/locations', name: '/assets/locations', desc: 'Current GPS locations for all assets (v2)' },
+    ]
+  },
+  {
+    category: 'Equipment',
+    items: [
+      { method: 'GET', path: '/equipment', name: '/equipment', desc: 'List all equipment' },
+      { method: 'GET', path: '/equipment/locations', name: '/equipment/locations', desc: 'Current locations of all equipment' },
+      { method: 'GET', path: '/equipment/stats', name: '/equipment/stats', desc: 'Equipment stats snapshot', params: { types: 'engineState' } },
+      { method: 'GET', path: '/equipment/stats/history', name: '/equipment/stats/history', desc: 'Historical equipment stats (last 1h)', params: { types: 'engineState', startTime: new Date(Date.now() - 3600000).toISOString(), endTime: new Date().toISOString() } },
+    ]
+  },
+  {
+    category: 'Industrial Assets',
+    items: [
+      { method: 'GET', path: '/industrial/assets', name: '/industrial/assets', desc: 'List all industrial assets' },
+      { method: 'GET', path: '/industrial/assets/locations', name: '/industrial/assets/locations', desc: 'Current locations of all industrial assets' },
+      { method: 'GET', path: '/industrial/assets/stats', name: '/industrial/assets/stats', desc: 'Stats for all industrial assets' },
+    ]
+  },
+  {
+    category: 'Sensors',
+    items: [
+      { method: 'GET', path: '/sensors', name: '/sensors', desc: 'List all sensors' },
+      { method: 'GET', path: '/sensors/history', name: '/sensors/history', desc: 'Historical sensor data (last 1h)', params: { startTime: new Date(Date.now() - 3600000).toISOString(), endTime: new Date().toISOString() } },
+    ]
+  },
+  {
+    category: 'Documents & DVIR',
+    items: [
+      { method: 'GET', path: '/fleet/dvirs', name: '/fleet/dvirs', desc: 'Driver Vehicle Inspection Reports (DVIRs)' },
+      { method: 'GET', path: '/defects', name: '/defects', desc: 'Vehicle/equipment defects from DVIRs' },
+      { method: 'GET', path: '/fleet/documents', name: '/fleet/documents', desc: 'Fleet documents submitted by drivers' },
+      { method: 'GET', path: '/fleet/document-types', name: '/fleet/document-types', desc: 'Available document type templates' },
+    ]
+  },
+  {
+    category: 'Alerts & Issues',
+    items: [
+      { method: 'GET', path: '/alerts/instances', name: '/alerts/instances', desc: 'Alert instances (triggered alerts)' },
+      { method: 'GET', path: '/alerts/configurations', name: '/alerts/configurations', desc: 'Alert configuration rules' },
+    ]
+  },
+  {
+    category: 'Reporting',
+    items: [
+      { method: 'GET', path: '/reports/drivers/speed', name: '/reports/drivers/speed', desc: 'Speed reports for drivers' },
+      { method: 'GET', path: '/reports/vehicles/speed-percent-of-time', name: '/reports/vehicles/speed', desc: 'Vehicle speeding % of time report' },
+      { method: 'GET', path: '/reports/vehicles/fuel-energy', name: '/reports/vehicles/fuel-energy', desc: 'Vehicle fuel & energy consumption report' },
+    ]
+  },
+];
+
+// -- State --
+let activeItem = null;
+let activeEp = null;
+let lastJson = '';
+
+// -- Render sidebar --
+function renderSidebar(filter = '') {
+  const list = document.getElementById('endpoint-list');
+  list.innerHTML = '';
+  const lf = filter.toLowerCase();
+
+  ENDPOINTS.forEach(cat => {
+    const filtered = lf
+      ? cat.items.filter(i => i.name.toLowerCase().includes(lf) || i.desc.toLowerCase().includes(lf))
+      : cat.items;
+
+    if (!filtered.length) return;
+
+    const catEl = document.createElement('div');
+    catEl.className = 'category';
+
+    const header = document.createElement('div');
+    header.className = 'category-header';
+    header.innerHTML = `
+      <span class="cat-label">${cat.category}</span>
+      <span class="cat-chevron">&#9662;</span>
+    `;
+    header.addEventListener('click', () => catEl.classList.toggle('collapsed'));
+
+    const itemsEl = document.createElement('div');
+    itemsEl.className = 'category-items';
+
+    filtered.forEach(ep => {
+      const item = document.createElement('div');
+      item.className = 'endpoint-item' + (activeItem === ep.path ? ' active' : '');
+      item.dataset.path = ep.path;
+      item.innerHTML = `
+        <span class="method-badge">${ep.method}</span>
+        <span class="ep-name">${ep.name}</span>
+      `;
+      item.addEventListener('click', () => selectEndpoint(ep));
+      itemsEl.appendChild(item);
+    });
+
+    catEl.appendChild(header);
+    catEl.appendChild(itemsEl);
+    list.appendChild(catEl);
+  });
+}
+
+function selectEndpoint(ep) {
+  activeItem = ep.path;
+  activeEp = ep;
+  renderSidebar(document.getElementById('search').value);
+
+  document.getElementById('url-path').textContent = ep.path;
+
+  document.getElementById('ep-desc-name').textContent = ep.name;
+  document.getElementById('ep-desc-text').textContent = ' — ' + ep.desc;
+  document.getElementById('endpoint-desc').classList.add('visible');
+
+  renderParams(ep);
+  sendRequest(ep);
+}
+
+// -- Params bar --
+function renderParams(ep) {
+  const bar = document.getElementById('params-bar');
+  bar.innerHTML = '';
+
+  if (!ep.params || Object.keys(ep.params).length === 0) {
+    bar.classList.remove('visible');
+    return;
+  }
+
+  bar.classList.add('visible');
+
+  Object.entries(ep.params).forEach(([key, value]) => {
+    const group = document.createElement('div');
+    group.className = 'param-group';
+
+    const label = document.createElement('label');
+    label.textContent = key;
+
+    const input = document.createElement('input');
+    input.dataset.param = key;
+
+    const isDate = key.toLowerCase().includes('time') || key.toLowerCase().includes('date');
+    if (isDate) {
+      input.type = 'datetime-local';
+      input.style.minWidth = '210px';
+      // Convert ISO string to datetime-local format
+      const d = new Date(value);
+      input.value = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    } else {
+      input.type = 'text';
+      input.value = value;
+    }
+
+    group.appendChild(label);
+    group.appendChild(input);
+    bar.appendChild(group);
+  });
+
+  const btn = document.createElement('button');
+  btn.className = 'resend-btn';
+  btn.textContent = 'Re-send';
+  btn.addEventListener('click', () => sendRequest(activeEp));
+  bar.appendChild(btn);
+}
+
+function getParamValues() {
+  const inputs = document.querySelectorAll('#params-bar input[data-param]');
+  const params = {};
+  inputs.forEach(input => {
+    let val = input.value;
+    if (input.type === 'datetime-local' && val) {
+      val = new Date(val).toISOString();
+    }
+    if (val) params[input.dataset.param] = val;
+  });
+  return params;
+}
+
+// -- Send request --
+async function sendRequest(ep) {
+  const loadingBar = document.getElementById('loading-bar');
+  loadingBar.classList.add('visible');
+
+  document.getElementById('empty-state').style.display = 'none';
+  document.getElementById('response-meta').classList.remove('visible');
+  document.getElementById('json-output').classList.remove('visible');
+
+  // Use param input values if available, otherwise fall back to ep.params
+  const hasParamInputs = document.querySelectorAll('#params-bar input[data-param]').length > 0;
+  const currentParams = hasParamInputs ? getParamValues() : (ep.params || {});
+
+  const params = new URLSearchParams({ endpoint: ep.path, ...currentParams });
+
+  try {
+    const res = await fetch('/api/proxy?' + params.toString());
+    const payload = await res.json();
+
+    const status = payload.status || res.status;
+    const duration = payload.duration;
+    const data = payload.data || payload.error || payload;
+
+    // Status badge
+    const badge = document.getElementById('status-badge');
+    badge.textContent = status;
+    badge.className = 'status-badge ' + (status < 300 ? 'ok' : status < 500 ? 'warn' : 'err');
+
+    document.getElementById('meta-duration').textContent = duration ? `${duration}ms` : '';
+    document.getElementById('meta-endpoint').textContent = ep.path;
+    document.getElementById('response-meta').classList.add('visible');
+
+    // Pretty JSON
+    const json = JSON.stringify(data, null, 2);
+    lastJson = json;
+    document.getElementById('json-output').innerHTML = syntaxHighlight(json);
+    document.getElementById('json-output').classList.add('visible');
+
+  } catch (err) {
+    document.getElementById('status-badge').textContent = 'ERROR';
+    document.getElementById('status-badge').className = 'status-badge err';
+    document.getElementById('meta-duration').textContent = '';
+    document.getElementById('meta-endpoint').textContent = ep.path;
+    document.getElementById('response-meta').classList.add('visible');
+    lastJson = JSON.stringify({ error: err.message }, null, 2);
+    document.getElementById('json-output').innerHTML = syntaxHighlight(lastJson);
+    document.getElementById('json-output').classList.add('visible');
+  }
+
+  loadingBar.classList.remove('visible');
+}
+
+// -- JSON syntax highlighter --
+function syntaxHighlight(json) {
+  return json
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(
+      /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
+      match => {
+        if (/^"/.test(match)) {
+          if (/:$/.test(match)) return `<span class="j-key">${match}</span>`;
+          return `<span class="j-str">${match}</span>`;
+        }
+        if (/true|false/.test(match)) return `<span class="j-bool">${match}</span>`;
+        if (/null/.test(match)) return `<span class="j-null">${match}</span>`;
+        return `<span class="j-num">${match}</span>`;
+      }
+    );
+}
+
+// -- Copy JSON --
+document.getElementById('copy-btn').addEventListener('click', () => {
+  if (!lastJson) return;
+  navigator.clipboard.writeText(lastJson).then(() => {
+    const btn = document.getElementById('copy-btn');
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy JSON', 2000);
+  });
+});
+
+// -- Search --
+document.getElementById('search').addEventListener('input', e => {
+  renderSidebar(e.target.value);
+});
+
+// -- Init --
+renderSidebar();
+</script>
+</body>
+</html>

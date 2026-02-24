@@ -469,11 +469,33 @@
 
     .dash-content {
       flex: 1;
-      overflow-y: auto;
-      padding: 24px;
+      overflow: hidden;
+      padding: 20px;
       display: flex;
       flex-direction: column;
-      gap: 20px;
+      gap: 16px;
+    }
+
+    /* Split layout: table left, map right */
+    .dash-split {
+      flex: 1;
+      display: flex;
+      gap: 16px;
+      overflow: hidden;
+      min-height: 0;
+    }
+    .dash-split-left {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .dash-split-right {
+      width: 45%;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
     }
 
     /* Summary bar */
@@ -553,8 +575,8 @@
 
     /* Vehicle table */
     .vehicle-table-wrap {
-      overflow-x: auto;
-      flex-shrink: 0;
+      flex: 1;
+      overflow: auto;
     }
     .vehicle-table {
       width: 100%;
@@ -579,6 +601,9 @@
       user-select: none;
       white-space: nowrap;
       transition: color .15s;
+      position: sticky;
+      top: 0;
+      z-index: 2;
     }
     .vehicle-table thead th:hover { color: var(--text); }
     .vehicle-table thead th .sort-arrow {
@@ -612,11 +637,11 @@
 
     /* Map */
     .dash-map-wrap {
-      flex-shrink: 0;
-      height: 400px;
+      flex: 1;
       border-radius: var(--radius);
       overflow: hidden;
       border: 1px solid var(--card-border);
+      min-height: 0;
     }
     #dash-map {
       width: 100%; height: 100%;
@@ -700,17 +725,22 @@
       <span class="dash-status" id="dash-status"></span>
     </div>
 
-    <div class="vehicle-table-wrap">
-      <table class="vehicle-table">
-        <thead>
-          <tr id="vtable-head"></tr>
-        </thead>
-        <tbody id="vtable-body"></tbody>
-      </table>
-    </div>
-
-    <div class="dash-map-wrap">
-      <div id="dash-map"></div>
+    <div class="dash-split">
+      <div class="dash-split-left">
+        <div class="vehicle-table-wrap">
+          <table class="vehicle-table">
+            <thead>
+              <tr id="vtable-head"></tr>
+            </thead>
+            <tbody id="vtable-body"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="dash-split-right">
+        <div class="dash-map-wrap">
+          <div id="dash-map"></div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -1080,7 +1110,9 @@ function renderDashMap() {
 
   const bounds = [];
 
-  dashVehicles.forEach(v => {
+  const vehicles = getFilteredVehicles();
+
+  vehicles.forEach(v => {
     if (v.lat == null || v.lng == null) return;
 
     const isRunning = v.status === 'Running';
@@ -1121,9 +1153,10 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
-// Dashboard search
+// Dashboard search — update both table and map live
 document.getElementById('dash-search').addEventListener('input', () => {
   renderDashTable();
+  renderDashMap();
 });
 
 

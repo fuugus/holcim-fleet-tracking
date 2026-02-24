@@ -3,7 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Holcim — Samsara API Explorer</title>
+  <title>Holcim — Fleet Tracking</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -18,7 +20,9 @@
       --accent-hover: #60a5fa;
       --accent-dim: rgba(59,130,246,0.12);
       --green: #22c55e;
+      --green-dim: rgba(34,197,94,0.12);
       --red: #ef4444;
+      --red-dim: rgba(239,68,68,0.12);
       --yellow: #f59e0b;
       --text: #e2e8f0;
       --text-dim: #64748b;
@@ -73,6 +77,28 @@
     }
     .logo-text { font-weight: 700; font-size: 15px; letter-spacing: -.3px; }
     .logo-sub { font-size: 12px; color: var(--text-dim); margin-left: 4px; font-weight: 400; }
+
+    /* -- Tab navigation -- */
+    .tab-nav {
+      display: flex;
+      gap: 4px;
+      margin-left: 24px;
+    }
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-dim);
+      font-size: 13px;
+      font-weight: 600;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background .15s, color .15s;
+      font-family: inherit;
+    }
+    .tab-btn:hover { background: rgba(255,255,255,.05); color: var(--text-muted); }
+    .tab-btn.active { background: var(--accent-dim); color: var(--accent-hover); }
+
     header .spacer { flex: 1; }
     .base-url-badge {
       font-size: 11px;
@@ -194,7 +220,7 @@
     }
     .endpoint-item.active .ep-name { color: var(--text); }
 
-    /* -- Main -- */
+    /* -- Main (API Explorer) -- */
     main {
       flex: 1;
       display: flex;
@@ -399,6 +425,227 @@
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 4px; }
+
+    /* ============================================
+       DASHBOARD STYLES
+       ============================================ */
+
+    #dashboard-view {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #explorer-view {
+      display: none;
+      flex: 1;
+      overflow: hidden;
+    }
+    #explorer-view.active {
+      display: flex;
+    }
+    #dashboard-view.active {
+      display: flex;
+    }
+
+    /* Dashboard loading */
+    .dash-loading {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      color: var(--text-dim);
+    }
+    .dash-spinner {
+      width: 32px; height: 32px;
+      border: 3px solid var(--card-border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+
+    .dash-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* Summary bar */
+    .summary-bar {
+      display: flex;
+      gap: 16px;
+      flex-shrink: 0;
+    }
+    .summary-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      padding: 16px 24px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .summary-card .sc-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      color: var(--text-dim);
+    }
+    .summary-card .sc-value {
+      font-size: 28px;
+      font-weight: 700;
+    }
+    .summary-card.total .sc-value { color: var(--text); }
+    .summary-card.running .sc-value { color: var(--green); }
+    .summary-card.stopped .sc-value { color: var(--red); }
+    .summary-card.unknown .sc-value { color: var(--text-dim); }
+
+    /* Dashboard toolbar */
+    .dash-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+    .dash-toolbar input {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 13px;
+      padding: 8px 12px 8px 32px;
+      outline: none;
+      width: 280px;
+      transition: border-color .15s;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748b' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-size: 14px;
+      background-position: 10px center;
+    }
+    .dash-toolbar input:focus { border-color: var(--accent); }
+    .dash-toolbar input::placeholder { color: var(--text-dim); }
+    .dash-toolbar .refresh-btn {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      color: var(--text-muted);
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: border-color .15s, color .15s;
+      font-family: inherit;
+    }
+    .dash-toolbar .refresh-btn:hover { border-color: var(--accent); color: var(--accent-hover); }
+    .dash-toolbar .dash-status {
+      font-size: 12px;
+      color: var(--text-dim);
+      margin-left: auto;
+    }
+
+    /* Vehicle table */
+    .vehicle-table-wrap {
+      overflow-x: auto;
+      flex-shrink: 0;
+    }
+    .vehicle-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .vehicle-table thead th {
+      background: var(--sidebar-bg);
+      text-align: left;
+      padding: 10px 14px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      color: var(--cat-text);
+      border-bottom: 1px solid var(--sidebar-border);
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+      transition: color .15s;
+    }
+    .vehicle-table thead th:hover { color: var(--text); }
+    .vehicle-table thead th .sort-arrow {
+      margin-left: 4px;
+      font-size: 9px;
+      opacity: 0.4;
+    }
+    .vehicle-table thead th.sort-active .sort-arrow { opacity: 1; color: var(--accent-hover); }
+    .vehicle-table tbody tr {
+      border-bottom: 1px solid var(--card-border);
+      transition: background .1s;
+    }
+    .vehicle-table tbody tr:last-child { border-bottom: none; }
+    .vehicle-table tbody tr:hover { background: rgba(255,255,255,.02); }
+    .vehicle-table tbody td {
+      padding: 9px 14px;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+    .vehicle-table .vt-name { color: var(--text); font-weight: 500; }
+    .vehicle-table .vt-badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 10px;
+    }
+    .vt-badge.running { background: var(--green-dim); color: var(--green); }
+    .vt-badge.stopped { background: var(--red-dim); color: var(--red); }
+    .vt-badge.unknown { background: rgba(100,116,139,.15); color: var(--text-dim); }
+
+    /* Map */
+    .dash-map-wrap {
+      flex-shrink: 0;
+      height: 400px;
+      border-radius: var(--radius);
+      overflow: hidden;
+      border: 1px solid var(--card-border);
+    }
+    #dash-map {
+      width: 100%; height: 100%;
+    }
+
+    /* Leaflet popup styling */
+    .leaflet-popup-content-wrapper {
+      background: var(--card-bg) !important;
+      color: var(--text) !important;
+      border: 1px solid var(--card-border) !important;
+      border-radius: 8px !important;
+      box-shadow: 0 4px 24px rgba(0,0,0,.4) !important;
+    }
+    .leaflet-popup-tip { background: var(--card-bg) !important; }
+    .leaflet-popup-content { font-size: 12px; line-height: 1.5; }
+    .leaflet-popup-content strong { color: var(--accent-hover); }
+
+    /* Dashboard error state */
+    .dash-error {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      color: var(--text-dim);
+    }
+    .dash-error .error-title { font-size: 16px; font-weight: 600; color: var(--red); }
+    .dash-error .error-msg { font-size: 13px; max-width: 400px; text-align: center; }
   </style>
 </head>
 <body>
@@ -406,13 +653,70 @@
 <header>
   <div class="logo">
     <div class="logo-icon">HF</div>
-    <span class="logo-text">Holcim Fleet <span class="logo-sub">/ Samsara API Explorer</span></span>
+    <span class="logo-text">Holcim Fleet</span>
   </div>
+  <nav class="tab-nav">
+    <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
+    <button class="tab-btn" data-tab="explorer">API Explorer</button>
+  </nav>
   <div class="spacer"></div>
   <div class="base-url-badge">api.eu.samsara.com</div>
 </header>
 
-<div class="layout">
+<!-- ============ DASHBOARD VIEW ============ -->
+<div id="dashboard-view" class="active">
+  <div class="dash-loading" id="dash-loading">
+    <div class="dash-spinner"></div>
+    <div>Loading fleet data...</div>
+  </div>
+  <div class="dash-error" id="dash-error" style="display:none;">
+    <div class="error-title">Failed to load fleet data</div>
+    <div class="error-msg" id="dash-error-msg"></div>
+    <button class="resend-btn" onclick="loadDashboard()" style="margin-top:8px;">Retry</button>
+  </div>
+  <div class="dash-content" id="dash-content" style="display:none;">
+    <div class="summary-bar">
+      <div class="summary-card total">
+        <span class="sc-label">Total Vehicles</span>
+        <span class="sc-value" id="sc-total">--</span>
+      </div>
+      <div class="summary-card running">
+        <span class="sc-label">Running</span>
+        <span class="sc-value" id="sc-running">--</span>
+      </div>
+      <div class="summary-card stopped">
+        <span class="sc-label">Stopped</span>
+        <span class="sc-value" id="sc-stopped">--</span>
+      </div>
+      <div class="summary-card unknown">
+        <span class="sc-label">No Data</span>
+        <span class="sc-value" id="sc-unknown">--</span>
+      </div>
+    </div>
+
+    <div class="dash-toolbar">
+      <input type="text" id="dash-search" placeholder="Filter vehicles..." autocomplete="off" />
+      <button class="refresh-btn" onclick="loadDashboard()">Refresh</button>
+      <span class="dash-status" id="dash-status"></span>
+    </div>
+
+    <div class="vehicle-table-wrap">
+      <table class="vehicle-table">
+        <thead>
+          <tr id="vtable-head"></tr>
+        </thead>
+        <tbody id="vtable-body"></tbody>
+      </table>
+    </div>
+
+    <div class="dash-map-wrap">
+      <div id="dash-map"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ EXPLORER VIEW ============ -->
+<div id="explorer-view" class="layout">
 
   <!-- Sidebar -->
   <aside>
@@ -428,7 +732,7 @@
       <div class="url-display">
         <span class="url-base">GET</span>
         <span class="url-base" style="color:var(--text-dim); margin-left:6px;">https://api.eu.samsara.com</span>
-        <span class="url-path" id="url-path"> — select an endpoint</span>
+        <span class="url-path" id="url-path"> -- select an endpoint</span>
       </div>
     </div>
 
@@ -463,6 +767,370 @@
 </div>
 
 <script>
+// ============================================
+// TAB NAVIGATION
+// ============================================
+
+let activeTab = 'dashboard';
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const tab = btn.dataset.tab;
+    if (tab === activeTab) return;
+    activeTab = tab;
+
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    const dashView = document.getElementById('dashboard-view');
+    const explorerView = document.getElementById('explorer-view');
+
+    if (tab === 'dashboard') {
+      dashView.style.display = '';
+      dashView.classList.add('active');
+      explorerView.style.display = 'none';
+      explorerView.classList.remove('active');
+    } else {
+      dashView.style.display = 'none';
+      dashView.classList.remove('active');
+      explorerView.style.display = '';
+      explorerView.classList.add('active');
+    }
+  });
+});
+
+// ============================================
+// DASHBOARD
+// ============================================
+
+let dashVehicles = [];
+let dashSortCol = 'name';
+let dashSortAsc = true;
+let dashMap = null;
+let dashMarkers = [];
+
+const DASH_COLUMNS = [
+  { key: 'name',      label: 'Vehicle Name' },
+  { key: 'plate',     label: 'License Plate' },
+  { key: 'makeModel', label: 'Make / Model' },
+  { key: 'driver',    label: 'Driver' },
+  { key: 'status',    label: 'Status' },
+  { key: 'location',  label: 'Location' },
+  { key: 'lastUpdate', label: 'Last Update' },
+];
+
+function relativeTime(ts) {
+  if (!ts) return '--';
+  const diff = Date.now() - new Date(ts).getTime();
+  if (diff < 0) return 'just now';
+  const secs = Math.floor(diff / 1000);
+  if (secs < 60) return secs + 's ago';
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return mins + 'm ago';
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return hrs + 'h ago';
+  const days = Math.floor(hrs / 24);
+  return days + 'd ago';
+}
+
+async function fetchJson(endpoint, params = {}) {
+  const qs = new URLSearchParams({ endpoint, ...params });
+  const res = await fetch('/api/proxy?' + qs.toString());
+  const payload = await res.json();
+  if (payload.status && payload.status >= 400) {
+    throw new Error('API returned status ' + payload.status);
+  }
+  return payload.data || payload;
+}
+
+async function loadDashboard() {
+  const loading = document.getElementById('dash-loading');
+  const content = document.getElementById('dash-content');
+  const error = document.getElementById('dash-error');
+
+  loading.style.display = '';
+  content.style.display = 'none';
+  error.style.display = 'none';
+
+  try {
+    const [vehiclesRes, statsRes, locationsRes] = await Promise.all([
+      fetchJson('/fleet/vehicles'),
+      fetchJson('/fleet/vehicles/stats', { types: 'engineStates' }),
+      fetchJson('/fleet/vehicles/locations'),
+    ]);
+
+    const vehiclesList = vehiclesRes.data || [];
+    const statsList = statsRes.data || [];
+    const locationsList = locationsRes.data || [];
+
+    // Index by vehicle ID
+    const statsMap = {};
+    statsList.forEach(s => {
+      const id = s.id;
+      const engineStates = s.engineState || s.engineStates || [];
+      const latest = Array.isArray(engineStates) ? engineStates[0] : engineStates;
+      statsMap[id] = {
+        state: latest ? (latest.value || '').toUpperCase() : null,
+        time: latest ? latest.time : null,
+      };
+    });
+
+    const locMap = {};
+    locationsList.forEach(l => {
+      const id = l.id;
+      const loc = l.location || {};
+      locMap[id] = {
+        lat: loc.latitude,
+        lng: loc.longitude,
+        speed: loc.speedMilesPerHour || loc.speed || 0,
+        address: (loc.reverseGeo && loc.reverseGeo.formattedLocation) || '',
+        time: loc.time || null,
+      };
+    });
+
+    // Merge
+    dashVehicles = vehiclesList.map(v => {
+      const id = v.id;
+      const stat = statsMap[id] || {};
+      const loc = locMap[id] || {};
+      const driver = v.staticAssignedDriver;
+      return {
+        id,
+        name: v.name || '--',
+        plate: v.licensePlate || '--',
+        make: v.make || '',
+        model: v.model || '',
+        makeModel: [v.make, v.model].filter(Boolean).join(' ') || '--',
+        driver: driver ? driver.name || (driver.firstName || '') + ' ' + (driver.lastName || '') : '--',
+        status: stat.state === 'ON' ? 'Running' : stat.state === 'OFF' ? 'Stopped' : 'Unknown',
+        statusRaw: stat.state || '',
+        engineTime: stat.time || null,
+        lat: loc.lat,
+        lng: loc.lng,
+        location: loc.address || '--',
+        locTime: loc.time || null,
+      };
+    });
+
+    // Update summary
+    const running = dashVehicles.filter(v => v.status === 'Running').length;
+    const stopped = dashVehicles.filter(v => v.status === 'Stopped').length;
+    const unknown = dashVehicles.filter(v => v.status === 'Unknown').length;
+    document.getElementById('sc-total').textContent = dashVehicles.length;
+    document.getElementById('sc-running').textContent = running;
+    document.getElementById('sc-stopped').textContent = stopped;
+    document.getElementById('sc-unknown').textContent = unknown;
+
+    document.getElementById('dash-status').textContent =
+      'Updated ' + new Date().toLocaleTimeString();
+
+    loading.style.display = 'none';
+    content.style.display = '';
+
+    renderDashTable();
+    renderDashMap();
+
+  } catch (err) {
+    loading.style.display = 'none';
+    error.style.display = '';
+    document.getElementById('dash-error-msg').textContent = err.message;
+  }
+}
+
+function getFilteredVehicles() {
+  const q = (document.getElementById('dash-search').value || '').toLowerCase();
+  if (!q) return dashVehicles;
+  return dashVehicles.filter(v =>
+    v.name.toLowerCase().includes(q) ||
+    v.plate.toLowerCase().includes(q) ||
+    v.driver.toLowerCase().includes(q) ||
+    v.status.toLowerCase().includes(q) ||
+    v.location.toLowerCase().includes(q) ||
+    v.makeModel.toLowerCase().includes(q)
+  );
+}
+
+function sortVehicles(list) {
+  const col = dashSortCol;
+  return list.slice().sort((a, b) => {
+    let va = a[col] || '';
+    let vb = b[col] || '';
+    if (col === 'status') {
+      const order = { Running: 0, Stopped: 1, Unknown: 2 };
+      va = order[va] !== undefined ? order[va] : 3;
+      vb = order[vb] !== undefined ? order[vb] : 3;
+    } else if (col === 'lastUpdate') {
+      va = a.engineTime ? new Date(a.engineTime).getTime() : 0;
+      vb = b.engineTime ? new Date(b.engineTime).getTime() : 0;
+    } else {
+      va = String(va).toLowerCase();
+      vb = String(vb).toLowerCase();
+    }
+    if (va < vb) return dashSortAsc ? -1 : 1;
+    if (va > vb) return dashSortAsc ? 1 : -1;
+    return 0;
+  });
+}
+
+function renderDashTable() {
+  // Header
+  const thead = document.getElementById('vtable-head');
+  thead.innerHTML = '';
+  DASH_COLUMNS.forEach(col => {
+    const th = document.createElement('th');
+    th.dataset.col = col.key;
+    const arrow = dashSortCol === col.key ? (dashSortAsc ? '\u25B2' : '\u25BC') : '\u25B4';
+    th.className = dashSortCol === col.key ? 'sort-active' : '';
+    th.innerHTML = col.label + ' <span class="sort-arrow">' + arrow + '</span>';
+    th.addEventListener('click', () => {
+      if (dashSortCol === col.key) {
+        dashSortAsc = !dashSortAsc;
+      } else {
+        dashSortCol = col.key;
+        dashSortAsc = true;
+      }
+      renderDashTable();
+    });
+    thead.appendChild(th);
+  });
+
+  // Body
+  const tbody = document.getElementById('vtable-body');
+  tbody.innerHTML = '';
+  const filtered = sortVehicles(getFilteredVehicles());
+
+  if (filtered.length === 0) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = DASH_COLUMNS.length;
+    td.style.textAlign = 'center';
+    td.style.padding = '24px';
+    td.style.color = 'var(--text-dim)';
+    td.textContent = 'No vehicles match your filter';
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+    return;
+  }
+
+  filtered.forEach(v => {
+    const tr = document.createElement('tr');
+
+    // Vehicle name
+    const tdName = document.createElement('td');
+    tdName.className = 'vt-name';
+    tdName.textContent = v.name;
+    tr.appendChild(tdName);
+
+    // License plate
+    const tdPlate = document.createElement('td');
+    tdPlate.textContent = v.plate;
+    tr.appendChild(tdPlate);
+
+    // Make/Model
+    const tdMake = document.createElement('td');
+    tdMake.textContent = v.makeModel;
+    tr.appendChild(tdMake);
+
+    // Driver
+    const tdDriver = document.createElement('td');
+    tdDriver.textContent = v.driver;
+    tr.appendChild(tdDriver);
+
+    // Status
+    const tdStatus = document.createElement('td');
+    const badge = document.createElement('span');
+    badge.className = 'vt-badge ' + v.status.toLowerCase();
+    badge.textContent = v.status;
+    tdStatus.appendChild(badge);
+    tr.appendChild(tdStatus);
+
+    // Location
+    const tdLoc = document.createElement('td');
+    tdLoc.textContent = v.location;
+    tdLoc.style.maxWidth = '300px';
+    tdLoc.style.overflow = 'hidden';
+    tdLoc.style.textOverflow = 'ellipsis';
+    tr.appendChild(tdLoc);
+
+    // Last update
+    const tdTime = document.createElement('td');
+    tdTime.textContent = relativeTime(v.engineTime);
+    tr.appendChild(tdTime);
+
+    tbody.appendChild(tr);
+  });
+}
+
+function renderDashMap() {
+  if (!dashMap) {
+    dashMap = L.map('dash-map', {
+      zoomControl: true,
+      attributionControl: true,
+    }).setView([46.85, 8.2], 8); // Switzerland center
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors',
+      maxZoom: 19,
+    }).addTo(dashMap);
+  }
+
+  // Clear old markers
+  dashMarkers.forEach(m => dashMap.removeLayer(m));
+  dashMarkers = [];
+
+  const bounds = [];
+
+  dashVehicles.forEach(v => {
+    if (v.lat == null || v.lng == null) return;
+
+    const isRunning = v.status === 'Running';
+    const color = isRunning ? '#22c55e' : v.status === 'Stopped' ? '#ef4444' : '#64748b';
+
+    const icon = L.divIcon({
+      className: '',
+      html: '<div style="width:12px;height:12px;background:' + color +
+            ';border:2px solid #fff;border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,.4);"></div>',
+      iconSize: [12, 12],
+      iconAnchor: [6, 6],
+      popupAnchor: [0, -8],
+    });
+
+    const marker = L.marker([v.lat, v.lng], { icon }).addTo(dashMap);
+    marker.bindPopup(
+      '<strong>' + escapeHtml(v.name) + '</strong><br>' +
+      'Status: <span style="color:' + color + ';font-weight:700;">' + v.status + '</span><br>' +
+      'Driver: ' + escapeHtml(v.driver) + '<br>' +
+      'Location: ' + escapeHtml(v.location)
+    );
+
+    dashMarkers.push(marker);
+    bounds.push([v.lat, v.lng]);
+  });
+
+  if (bounds.length > 0) {
+    dashMap.fitBounds(bounds, { padding: [30, 30] });
+  }
+
+  // Fix map size after becoming visible
+  setTimeout(() => dashMap.invalidateSize(), 100);
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// Dashboard search
+document.getElementById('dash-search').addEventListener('input', () => {
+  renderDashTable();
+});
+
+
+// ============================================
+// API EXPLORER (unchanged logic)
+// ============================================
+
 // -- Endpoint definitions --
 const ENDPOINTS = [
   {
@@ -479,7 +1147,7 @@ const ENDPOINTS = [
     ]
   },
   {
-    category: 'Fleet — Vehicles',
+    category: 'Fleet -- Vehicles',
     items: [
       { method: 'GET', path: '/fleet/vehicles', name: '/fleet/vehicles', desc: 'List all vehicles' },
       { method: 'GET', path: '/fleet/vehicles/locations', name: '/fleet/vehicles/locations', desc: 'Current GPS locations for all vehicles' },
@@ -489,7 +1157,7 @@ const ENDPOINTS = [
     ]
   },
   {
-    category: 'Fleet — Trailers',
+    category: 'Fleet -- Trailers',
     items: [
       { method: 'GET', path: '/trailers', name: '/trailers', desc: 'List all trailers' },
       { method: 'GET', path: '/trailers/locations', name: '/trailers/locations', desc: 'Current GPS locations for all trailers' },
@@ -498,14 +1166,14 @@ const ENDPOINTS = [
     ]
   },
   {
-    category: 'Fleet — Drivers',
+    category: 'Fleet -- Drivers',
     items: [
       { method: 'GET', path: '/fleet/drivers', name: '/fleet/drivers', desc: 'List all drivers' },
       { method: 'GET', path: '/fleet/drivers/locations', name: '/fleet/drivers/locations', desc: 'Current locations of drivers' },
     ]
   },
   {
-    category: 'Fleet — HOS',
+    category: 'Fleet -- HOS',
     items: [
       { method: 'GET', path: '/fleet/hos/logs', name: '/fleet/hos/logs', desc: 'HOS logs for all drivers' },
       { method: 'GET', path: '/fleet/hos/daily-logs', name: '/fleet/hos/daily-logs', desc: 'Daily HOS summary logs', params: { startDate: new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10), endDate: new Date().toISOString().slice(0, 10) } },
@@ -514,13 +1182,13 @@ const ENDPOINTS = [
     ]
   },
   {
-    category: 'Fleet — Safety',
+    category: 'Fleet -- Safety',
     items: [
       { method: 'GET', path: '/fleet/safety-events', name: '/fleet/safety-events', desc: 'Safety events' },
     ]
   },
   {
-    category: 'Fleet — Trips',
+    category: 'Fleet -- Trips',
     items: [
       { method: 'GET', path: '/fleet/trips', name: '/fleet/trips', desc: 'Trip history for vehicles' },
     ]
@@ -631,7 +1299,7 @@ function selectEndpoint(ep) {
   document.getElementById('url-path').textContent = ep.path;
 
   document.getElementById('ep-desc-name').textContent = ep.name;
-  document.getElementById('ep-desc-text').textContent = ' — ' + ep.desc;
+  document.getElementById('ep-desc-text').textContent = ' -- ' + ep.desc;
   document.getElementById('endpoint-desc').classList.add('visible');
 
   renderParams(ep);
@@ -792,6 +1460,7 @@ document.getElementById('search').addEventListener('input', e => {
 
 // -- Init --
 renderSidebar();
+loadDashboard();
 </script>
 </body>
 </html>

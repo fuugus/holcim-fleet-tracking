@@ -1993,6 +1993,7 @@ function selectVehicle(id) {
   loadTrips(v);
   loadHOS(v);
   loadSafetyEvents(v);
+  loadDVIRs(v);
 }
 
 function deselectVehicle() {
@@ -2068,6 +2069,10 @@ function showDetailPanel(v) {
         <div class="vd-section-title">Safety Events (30 days)</div>
         <div class="vd-section-body"><div class="vd-loading"><div class="vd-spinner"></div></div></div>
       </div>
+      <div class="vd-section" id="vd-dvirs">
+        <div class="vd-section-title">DVIRs (180 days)</div>
+        <div class="vd-section-body"><div class="vd-loading"><div class="vd-spinner"></div></div></div>
+      </div>
     </div>
   `;
   setTimeout(() => {
@@ -2094,23 +2099,23 @@ async function loadTrips(v) {
   try {
     const now = new Date();
     const weekAgo = new Date(now.getTime() - 7 * 86400000);
-    const data = await fetchJson('/fleet/trips', {
-      vehicleIds: v.id,
-      startTime: weekAgo.toISOString(),
-      endTime: now.toISOString(),
+    const data = await fetchJson('/v1/fleet/trips', {
+      vehicleId: v.id,
+      startMs: weekAgo.getTime(),
+      endMs: now.getTime(),
     });
     if (selectedVehicleId !== capturedId) return;
-    const trips = (data.data || data.trips || (Array.isArray(data) ? data : [])).slice(0, 5);
+    const trips = (data.trips || data.data || (Array.isArray(data) ? data : [])).slice(0, 5);
     if (trips.length === 0) {
       section.innerHTML = '<div class="vd-empty">No trips in the last 7 days</div>';
       return;
     }
     section.innerHTML = trips.map(t => {
-      const start = t.startTime ? new Date(t.startTime).toLocaleString() : '--';
+      const start = t.startMs ? new Date(t.startMs).toLocaleString() : '--';
       const dist = t.distanceMeters ? (t.distanceMeters / 1000).toFixed(1) + ' km' : '--';
-      const dur = (t.startTime && t.endTime) ? formatDuration(new Date(t.endTime) - new Date(t.startTime)) : '--';
-      const startAddr = (t.startLocation && (t.startLocation.formattedAddress || t.startLocation.name)) || '';
-      const endAddr = (t.endLocation && (t.endLocation.formattedAddress || t.endLocation.name)) || '';
+      const dur = (t.startMs && t.endMs) ? formatDuration(t.endMs - t.startMs) : '--';
+      const startAddr = (typeof t.startLocation === 'string') ? t.startLocation : '';
+      const endAddr = (typeof t.endLocation === 'string') ? t.endLocation : '';
       return '<div class="vd-trip">' +
         '<div class="vd-trip-route">' + escapeHtml(startAddr || 'Start') + ' → ' + escapeHtml(endAddr || 'End') + '</div>' +
         '<div class="vd-trip-meta">' + dist + ' · ' + dur + ' · ' + start + '</div>' +
@@ -2140,15 +2145,20 @@ async function loadHOS(v) {
     }
     const clock = clocks.find(c => c.driver && c.driver.id === v.driverId) || clocks[0];
     const dutyStatus = clock.currentDutyStatus || clock.dutyStatus || {};
-    const statusName = dutyStatus.statusName || dutyStatus.status || '--';
-    const remaining = clock.clocks || clock.remainingClocks || {};
-    let html = '<div class="vd-hos-status">Duty Status: <strong>' + escapeHtml(statusName) + '</strong></div>';
-    if (remaining.driveMs || remaining.shiftMs || remaining.cycleMs || remaining.breakMs) {
+    const statusName = dutyStatus.hosStatusType || dutyStatus.statusName || dutyStatus.status || '--';
+    const statusLabel = statusName.replace(/([A-Z])/g, ' $1').trim();
+    const c = clock.clocks || {};
+    const driveMs = c.drive && c.drive.driveRemainingDurationMs;
+    const shiftMs = c.shift && c.shift.shiftRemainingDurationMs;
+    const cycleMs = c.cycle && c.cycle.cycleRemainingDurationMs;
+    const breakMs = c.break && c.break.timeUntilBreakDurationMs;
+    let html = '<div class="vd-hos-status">Duty Status: <strong>' + escapeHtml(statusLabel) + '</strong></div>';
+    if (driveMs != null || shiftMs != null || cycleMs != null || breakMs != null) {
       html += '<div class="vd-hos-clocks">';
-      if (remaining.driveMs != null) html += '<div class="vd-hos-row"><span>Drive</span><span>' + formatDuration(remaining.driveMs) + '</span></div>';
-      if (remaining.shiftMs != null) html += '<div class="vd-hos-row"><span>Shift</span><span>' + formatDuration(remaining.shiftMs) + '</span></div>';
-      if (remaining.cycleMs != null) html += '<div class="vd-hos-row"><span>Cycle</span><span>' + formatDuration(remaining.cycleMs) + '</span></div>';
-      if (remaining.breakMs != null) html += '<div class="vd-hos-row"><span>Break</span><span>' + formatDuration(remaining.breakMs) + '</span></div>';
+      if (driveMs != null) html += '<div class="vd-hos-row"><span>Drive</span><span>' + formatDuration(driveMs) + '</span></div>';
+      if (shiftMs != null) html += '<div class="vd-hos-row"><span>Shift</span><span>' + formatDuration(shiftMs) + '</span></div>';
+      if (cycleMs != null) html += '<div class="vd-hos-row"><span>Cycle</span><span>' + formatDuration(cycleMs) + '</span></div>';
+      if (breakMs != null) html += '<div class="vd-hos-row"><span>Break</span><span>' + formatDuration(breakMs) + '</span></div>';
       html += '</div>';
     }
     section.innerHTML = html;
@@ -2188,7 +2198,11 @@ async function loadSafetyEvents(v) {
     }).join('');
   } catch (err) {
     if (selectedVehicleId !== capturedId) return;
-    section.innerHTML = '<div class="vd-error">Failed to load safety events</div>';
+    if (err.message && err.message.includes('401')) {
+      section.innerHTML = '<div class="vd-empty">API token lacks Safety Events & Scores read permissions</div>';
+    } else {
+      section.innerHTML = '<div class="vd-error">Failed to load safety events</div>';
+    }
   }
 }
 
@@ -2197,20 +2211,31 @@ async function loadDVIRs(v) {
   if (!section) return;
   const capturedId = selectedVehicleId;
   try {
-    const data = await fetchJson('/fleet/dvirs', { vehicleIds: v.id });
+    const now = new Date();
+    const ninetyAgo = new Date(now.getTime() - 90 * 86400000);
+    const oneEightyAgo = new Date(now.getTime() - 180 * 86400000);
+    const [d1, d2] = await Promise.all([
+      fetchJson('/v1/fleet/maintenance/dvirs', { startMs: ninetyAgo.getTime(), endMs: now.getTime() }),
+      fetchJson('/v1/fleet/maintenance/dvirs', { startMs: oneEightyAgo.getTime(), endMs: ninetyAgo.getTime() }),
+    ]);
     if (selectedVehicleId !== capturedId) return;
-    const dvirs = (data.data || data.dvirs || (Array.isArray(data) ? data : [])).slice(0, 5);
+    const allDvirs = [...(d1.dvirs || []), ...(d2.dvirs || [])];
+    const dvirs = allDvirs.filter(d => d.vehicle && String(d.vehicle.id) === String(v.id)).slice(0, 5);
     if (dvirs.length === 0) {
-      section.innerHTML = '<div class="vd-empty">No DVIRs found</div>';
+      section.innerHTML = '<div class="vd-empty">No DVIRs in the last 180 days</div>';
       return;
     }
     section.innerHTML = dvirs.map(d => {
-      const time = (d.inspectionTime || d.time) ? new Date(d.inspectionTime || d.time).toLocaleString() : '--';
-      const safe = d.isSafe !== false && (!d.defects || d.defects.length === 0);
+      const time = d.timeMs ? new Date(d.timeMs).toLocaleString() : '--';
+      const condition = d.vehicleCondition || 'unknown';
       const defectCount = d.defects ? d.defects.length : 0;
+      const hasDefects = defectCount > 0;
+      const badgeClass = hasDefects ? 'defects' : 'safe';
+      const badgeText = hasDefects ? defectCount + ' defect' + (defectCount !== 1 ? 's' : '') : condition;
+      const inspector = (d.authorSignature && d.authorSignature.name) || '';
       return '<div class="vd-dvir">' +
-        '<div class="vd-dvir-status"><span class="vd-dvir-badge ' + (safe ? 'safe' : 'defects') + '">' + (safe ? 'Safe' : defectCount + ' defect' + (defectCount !== 1 ? 's' : '')) + '</span></div>' +
-        '<div class="vd-dvir-time">' + time + '</div>' +
+        '<div class="vd-dvir-status"><span class="vd-dvir-badge ' + badgeClass + '">' + escapeHtml(badgeText) + '</span></div>' +
+        '<div class="vd-dvir-time">' + time + (inspector ? ' · ' + escapeHtml(inspector) : '') + '</div>' +
         '</div>';
     }).join('');
   } catch (err) {

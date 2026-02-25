@@ -1431,6 +1431,7 @@ function renderDashMap() {
 
       dashMap.on('load', () => {
         dashMapReady = true;
+        loadSwissBorder();
         setupMapSources();
         updateMapData();
       });
@@ -1463,6 +1464,34 @@ function renderDashMap() {
   if (dashMapReady) {
     updateMapData();
   }
+}
+
+function loadSwissBorder() {
+  fetch('https://raw.githubusercontent.com/ZHB/switzerland-geojson/master/country/switzerland.geojson')
+    .then(r => r.json())
+    .then(data => {
+      if (!dashMap) return;
+      dashMap.addSource('switzerland', { type: 'geojson', data });
+      dashMap.addLayer({
+        id: 'switzerland-fill',
+        type: 'fill',
+        source: 'switzerland',
+        paint: {
+          'fill-color': '#ffffff',
+          'fill-opacity': 0.06,
+        },
+      }, 'clusters');
+      dashMap.addLayer({
+        id: 'switzerland-border',
+        type: 'line',
+        source: 'switzerland',
+        paint: {
+          'line-color': 'rgba(255,255,255,0.15)',
+          'line-width': 1.5,
+        },
+      }, 'clusters');
+    })
+    .catch(() => {});
 }
 
 function setupMapSources() {

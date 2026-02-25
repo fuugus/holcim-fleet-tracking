@@ -1098,6 +1098,7 @@ async function loadDashboard() {
   loading.style.display = '';
   content.style.display = 'none';
   error.style.display = 'none';
+  document.querySelectorAll('.maplibregl-popup').forEach(p => p.remove());
   deselectVehicle();
 
   try {

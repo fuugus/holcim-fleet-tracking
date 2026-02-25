@@ -2022,18 +2022,9 @@ function deselectVehicle() {
 
 function flyToVehicle(v) {
   if (!dashMap || v.lat == null || v.lng == null) return;
+  // Close any open popups
+  document.querySelectorAll('.maplibregl-popup').forEach(p => p.remove());
   dashMap.flyTo({ center: [v.lng, v.lat], zoom: 14, duration: 1000 });
-
-  const color = v.status === 'Running' ? '#60a5fa' : v.status === 'Stopped' ? '#818cf8' : '#64748b';
-  new maplibregl.Popup({ offset: 8, closeOnClick: true })
-    .setLngLat([v.lng, v.lat])
-    .setHTML(
-      '<strong>' + escapeHtml(v.name) + '</strong><br>' +
-      'Status: <span style="color:' + color + ';font-weight:700;">' + escapeHtml(v.status) + '</span><br>' +
-      'Driver: ' + escapeHtml(v.driver) + '<br>' +
-      'Location: ' + escapeHtml(v.location)
-    )
-    .addTo(dashMap);
 }
 
 function showDetailPanel(v) {

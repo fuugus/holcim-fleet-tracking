@@ -1093,10 +1093,13 @@ async function loadDashboard(forceRefresh) {
   const content = document.getElementById('dash-content');
   const error = document.getElementById('dash-error');
 
-  loading.style.display = '';
-  content.style.display = 'none';
-  error.style.display = 'none';
-  deselectVehicle();
+  const isQuietReload = !forceRefresh && dashVehicles.length > 0;
+  if (!isQuietReload) {
+    loading.style.display = '';
+    content.style.display = 'none';
+    error.style.display = 'none';
+    deselectVehicle();
+  }
 
   try {
     const url = forceRefresh ? '/api/dashboard?refresh=true' : '/api/dashboard';

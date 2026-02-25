@@ -1427,6 +1427,7 @@ function renderDashMap() {
         center: [8.2, 46.85],
         zoom: 7,
         attributionControl: false,
+        fadeDuration: 0,
       });
 
       dashMap.on('load', () => {
@@ -1553,6 +1554,8 @@ function setupMapLayers() {
       'text-field': '{point_count_abbreviated}',
       'text-size': 11,
       'text-font': ['Noto Sans Regular'],
+      'text-allow-overlap': true,
+      'text-ignore-placement': true,
     },
     paint: {
       'text-color': '#ffffff',

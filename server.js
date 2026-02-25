@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
 const path = require('path');
@@ -5,7 +6,7 @@ const path = require('path');
 const app = express();
 const PORT = 3000;
 
-const API_KEY = 'REDACTED';
+const API_KEY = process.env.SAMSARA_API_KEY;
 const BASE_URL = 'https://api.eu.samsara.com';
 
 app.use(express.static(path.join(__dirname, 'public')));

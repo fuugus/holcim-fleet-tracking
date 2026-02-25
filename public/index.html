@@ -627,7 +627,18 @@
       text-overflow: ellipsis;
     }
     .vehicle-table .vt-name { color: var(--text); font-weight: 500; }
-    .vehicle-table .vt-info { font-size: 11px; color: var(--text-dim); white-space: nowrap; }
+    .vehicle-table .vt-info, .vehicle-table th[data-col="info"] { white-space: nowrap; }
+    .vt-info-tag {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 5px;
+      border-radius: 10px;
+      margin-left: 2px;
+      background: rgba(100,116,139,.15);
+      color: var(--text-dim);
+    }
+    .vt-info-tag:first-child { margin-left: 0; }
     .vehicle-table .vt-badge {
       display: inline-block;
       font-size: 10px;
@@ -1047,7 +1058,7 @@ const DASH_COLUMNS = [
   { key: 'status',    label: 'Status' },
   { key: 'location',  label: 'Location' },
   { key: 'lastUpdate', label: 'Last Update' },
-  { key: 'info',       label: 'Info' },
+  { key: 'info',       label: 'Info', noSort: true },
 ];
 
 function relativeTime(ts) {
@@ -1195,18 +1206,22 @@ function renderDashTable() {
   DASH_COLUMNS.forEach(col => {
     const th = document.createElement('th');
     th.dataset.col = col.key;
-    const arrow = dashSortCol === col.key ? (dashSortAsc ? '\u25B2' : '\u25BC') : '\u25B4';
-    th.className = dashSortCol === col.key ? 'sort-active' : '';
-    th.innerHTML = col.label + ' <span class="sort-arrow">' + arrow + '</span>';
-    th.addEventListener('click', () => {
-      if (dashSortCol === col.key) {
-        dashSortAsc = !dashSortAsc;
-      } else {
-        dashSortCol = col.key;
-        dashSortAsc = true;
-      }
-      renderDashTable();
-    });
+    if (col.noSort) {
+      th.textContent = col.label;
+    } else {
+      const arrow = dashSortCol === col.key ? (dashSortAsc ? '\u25B2' : '\u25BC') : '\u25B4';
+      th.className = dashSortCol === col.key ? 'sort-active' : '';
+      th.innerHTML = col.label + ' <span class="sort-arrow">' + arrow + '</span>';
+      th.addEventListener('click', () => {
+        if (dashSortCol === col.key) {
+          dashSortAsc = !dashSortAsc;
+        } else {
+          dashSortCol = col.key;
+          dashSortAsc = true;
+        }
+        renderDashTable();
+      });
+    }
     thead.appendChild(th);
   });
 
@@ -1234,10 +1249,10 @@ function renderDashTable() {
     if (selectedVehicleId === v.id) tr.classList.add('selected');
     tr.addEventListener('click', () => selectVehicle(v.id));
 
-    const infoParts = [];
-    if (v.tripCount > 0) infoParts.push(v.tripCount + ' trip' + (v.tripCount !== 1 ? 's' : ''));
-    if (v.hasHOS) infoParts.push('HOS');
-    if (v.dvirCount > 0) infoParts.push(v.dvirCount + ' DVIR' + (v.dvirCount !== 1 ? 's' : ''));
+    const infoTags = [];
+    if (v.tripCount > 0) infoTags.push({ letter: 'T', tip: v.tripCount + ' trip' + (v.tripCount !== 1 ? 's' : '') + ' (7d)' });
+    if (v.hasHOS) infoTags.push({ letter: 'H', tip: 'HOS: ' + (v.hosStatus || 'active').replace(/([A-Z])/g, ' $1').trim() });
+    if (v.dvirCount > 0) infoTags.push({ letter: 'D', tip: v.dvirCount + ' DVIR' + (v.dvirCount !== 1 ? 's' : '') + ' (180d)' });
 
     const cells = [
       { text: v.name,               cls: 'vt-name' },
@@ -1247,7 +1262,7 @@ function renderDashTable() {
       { text: v.status,             badge: true },
       { text: v.location },
       { text: relativeTime(v.engineTime) },
-      { text: infoParts.join(' · '), cls: 'vt-info' },
+      { tags: infoTags, cls: 'vt-info' },
     ];
 
     cells.forEach(c => {
@@ -1257,9 +1272,17 @@ function renderDashTable() {
         span.className = 'vt-badge ' + v.status.toLowerCase();
         span.textContent = c.text;
         td.appendChild(span);
+      } else if (c.tags) {
+        c.tags.forEach(t => {
+          const span = document.createElement('span');
+          span.className = 'vt-info-tag';
+          span.textContent = t.letter;
+          span.title = t.tip;
+          td.appendChild(span);
+        });
       } else {
         td.textContent = c.text;
-        td.title = c.text;
+        td.title = c.tip || c.text;
       }
       if (c.cls) td.className = c.cls;
       tr.appendChild(td);

@@ -1520,10 +1520,11 @@ function setupMapLayers() {
     filter: ['has', 'point_count'],
     paint: {
       'circle-color': [
-        'case',
-        ['>', ['get', 'running'], ['get', 'stopped']], 'rgba(96,165,250,0.75)',
-        ['>', ['get', 'stopped'], ['get', 'running']], 'rgba(239,68,68,0.75)',
-        'rgba(100,116,139,0.75)'
+        'interpolate', ['linear'],
+        ['+', 0.5, ['/', ['-', ['get', 'running'], ['get', 'stopped']], ['*', 2, ['get', 'point_count']]]],
+        0, 'rgba(239,68,68,0.75)',
+        0.5, 'rgba(130,130,130,0.75)',
+        1, 'rgba(96,165,250,0.75)'
       ],
       'circle-radius': [
         'step', ['get', 'point_count'],
@@ -1533,10 +1534,11 @@ function setupMapLayers() {
       ],
       'circle-stroke-width': 3,
       'circle-stroke-color': [
-        'case',
-        ['>', ['get', 'running'], ['get', 'stopped']], 'rgba(96,165,250,0.2)',
-        ['>', ['get', 'stopped'], ['get', 'running']], 'rgba(239,68,68,0.2)',
-        'rgba(100,116,139,0.2)'
+        'interpolate', ['linear'],
+        ['+', 0.5, ['/', ['-', ['get', 'running'], ['get', 'stopped']], ['*', 2, ['get', 'point_count']]]],
+        0, 'rgba(239,68,68,0.2)',
+        0.5, 'rgba(130,130,130,0.2)',
+        1, 'rgba(96,165,250,0.2)'
       ],
     },
   });

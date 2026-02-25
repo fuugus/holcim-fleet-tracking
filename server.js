@@ -98,6 +98,7 @@ async function refreshDetailCache(fullRefresh) {
             detailCache.hos[did] = {
               statusType: status.hosStatusType || null,
               hasClocks: !!(cl.drive || cl.shift || cl.cycle || cl.break),
+              raw: c,
             };
           });
           return clocks.length;
@@ -118,13 +119,14 @@ async function refreshDetailCache(fullRefresh) {
         }).catch(() => ({ data: { dvirs: [] } })),
       ]).then(([r1, r2]) => {
         const all = [...(r1.data.dvirs || []), ...(r2.data.dvirs || [])];
-        // Reset and rebuild per-vehicle counts
+        // Reset and rebuild per-vehicle
         detailCache.dvirs = {};
         all.forEach(d => {
           const vid = d.vehicle && String(d.vehicle.id);
           if (!vid) return;
-          if (!detailCache.dvirs[vid]) detailCache.dvirs[vid] = { count: 0, lastTime: 0 };
+          if (!detailCache.dvirs[vid]) detailCache.dvirs[vid] = { count: 0, lastTime: 0, items: [] };
           detailCache.dvirs[vid].count++;
+          detailCache.dvirs[vid].items.push(d);
           if (d.timeMs > detailCache.dvirs[vid].lastTime) detailCache.dvirs[vid].lastTime = d.timeMs;
         });
         return all.length;
@@ -153,9 +155,10 @@ async function refreshDetailCache(fullRefresh) {
         detailCache.trips[v.id] = {
           count: trips.length,
           lastTripEnd: trips.length > 0 ? trips[0].endMs || 0 : 0,
+          items: trips,
         };
       }).catch(() => {
-        if (!detailCache.trips[v.id]) detailCache.trips[v.id] = { count: 0, lastTripEnd: 0 };
+        if (!detailCache.trips[v.id]) detailCache.trips[v.id] = { count: 0, lastTripEnd: 0, items: [] };
       })
     );
 
@@ -265,9 +268,12 @@ app.get('/api/dashboard', async (req, res) => {
     return {
       ...v,
       tripCount: trip ? trip.count : 0,
+      trips: trip ? trip.items.slice(0, 5) : [],
       hosStatus: hos ? hos.statusType : null,
       hasHOS: !!(hos && hos.statusType),
+      hosData: hos ? hos.raw : null,
       dvirCount: dvir ? dvir.count : 0,
+      dvirs: dvir ? dvir.items.slice(0, 5) : [],
     };
   });
   res.json({ data, timestamp: dashboardCache.timestamp });

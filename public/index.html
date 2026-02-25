@@ -729,6 +729,19 @@
       line-height: 1;
     }
     .vd-close:hover { background: var(--red-dim); color: var(--red); }
+    .vd-refresh {
+      background: none;
+      border: 1px solid var(--card-border);
+      color: var(--text-muted);
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background .15s, color .15s, border-color .15s;
+      font-family: inherit;
+      margin-right: 6px;
+    }
+    .vd-refresh:hover { border-color: var(--accent); color: var(--accent-hover); }
     .vd-scroll {
       flex: 1;
       overflow-y: auto;
@@ -2021,10 +2034,7 @@ function selectVehicle(id) {
 
   flyToVehicle(v);
   showDetailPanel(v);
-  loadTrips(v);
-  loadHOS(v);
-  loadSafetyEvents(v);
-  loadDVIRs(v);
+  showCachedDetails(v);
 }
 
 function deselectVehicle() {
@@ -2077,7 +2087,10 @@ function showDetailPanel(v) {
   panel.innerHTML = `
     <div class="vd-header">
       <div class="vd-title">${escapeHtml(v.name)}</div>
-      <button class="vd-close" onclick="deselectVehicle()">&times;</button>
+      <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
+        <button class="vd-refresh" onclick="refreshDetailPanel()">Refresh</button>
+        <button class="vd-close" onclick="deselectVehicle()">&times;</button>
+      </div>
     </div>
     <div class="vd-scroll">
       <div class="vd-info">
@@ -2121,6 +2134,87 @@ function formatDuration(ms) {
   const mins = Math.floor((ms % 3600000) / 60000);
   if (hours > 0) return hours + 'h ' + mins + 'm';
   return mins + 'm';
+}
+
+function renderTripsHTML(trips) {
+  if (!trips || trips.length === 0) return '<div class="vd-empty">No trips in the last 7 days</div>';
+  return trips.slice(0, 5).map(t => {
+    const start = t.startMs ? new Date(t.startMs).toLocaleString() : '--';
+    const dist = t.distanceMeters ? (t.distanceMeters / 1000).toFixed(1) + ' km' : '--';
+    const dur = (t.startMs && t.endMs) ? formatDuration(t.endMs - t.startMs) : '--';
+    const startAddr = (typeof t.startLocation === 'string') ? t.startLocation : '';
+    const endAddr = (typeof t.endLocation === 'string') ? t.endLocation : '';
+    return '<div class="vd-trip">' +
+      '<div class="vd-trip-route">' + escapeHtml(startAddr || 'Start') + ' \u2192 ' + escapeHtml(endAddr || 'End') + '</div>' +
+      '<div class="vd-trip-meta">' + dist + ' \u00b7 ' + dur + ' \u00b7 ' + start + '</div>' +
+      '</div>';
+  }).join('');
+}
+
+function renderHOSHTML(hosData, driverId) {
+  if (!driverId) return '<div class="vd-empty">No assigned driver</div>';
+  if (!hosData) return '<div class="vd-empty">No HOS data available</div>';
+  const clock = hosData;
+  const dutyStatus = clock.currentDutyStatus || clock.dutyStatus || {};
+  const statusName = dutyStatus.hosStatusType || dutyStatus.statusName || dutyStatus.status || '--';
+  const statusLabel = statusName.replace(/([A-Z])/g, ' $1').trim();
+  const c = clock.clocks || {};
+  const driveMs = c.drive && c.drive.driveRemainingDurationMs;
+  const shiftMs = c.shift && c.shift.shiftRemainingDurationMs;
+  const cycleMs = c.cycle && c.cycle.cycleRemainingDurationMs;
+  const breakMs = c.break && c.break.timeUntilBreakDurationMs;
+  let html = '<div class="vd-hos-status">Duty Status: <strong>' + escapeHtml(statusLabel) + '</strong></div>';
+  if (driveMs != null || shiftMs != null || cycleMs != null || breakMs != null) {
+    html += '<div class="vd-hos-clocks">';
+    if (driveMs != null) html += '<div class="vd-hos-row"><span>Drive</span><span>' + formatDuration(driveMs) + '</span></div>';
+    if (shiftMs != null) html += '<div class="vd-hos-row"><span>Shift</span><span>' + formatDuration(shiftMs) + '</span></div>';
+    if (cycleMs != null) html += '<div class="vd-hos-row"><span>Cycle</span><span>' + formatDuration(cycleMs) + '</span></div>';
+    if (breakMs != null) html += '<div class="vd-hos-row"><span>Break</span><span>' + formatDuration(breakMs) + '</span></div>';
+    html += '</div>';
+  }
+  return html;
+}
+
+function renderDVIRsHTML(dvirs) {
+  if (!dvirs || dvirs.length === 0) return '<div class="vd-empty">No DVIRs in the last 180 days</div>';
+  return dvirs.slice(0, 5).map(d => {
+    const time = d.timeMs ? new Date(d.timeMs).toLocaleString() : '--';
+    const condition = d.vehicleCondition || 'unknown';
+    const defectCount = d.defects ? d.defects.length : 0;
+    const hasDefects = defectCount > 0;
+    const badgeClass = hasDefects ? 'defects' : 'safe';
+    const badgeText = hasDefects ? defectCount + ' defect' + (defectCount !== 1 ? 's' : '') : condition;
+    const inspector = (d.authorSignature && d.authorSignature.name) || '';
+    return '<div class="vd-dvir">' +
+      '<div class="vd-dvir-status"><span class="vd-dvir-badge ' + badgeClass + '">' + escapeHtml(badgeText) + '</span></div>' +
+      '<div class="vd-dvir-time">' + time + (inspector ? ' \u00b7 ' + escapeHtml(inspector) : '') + '</div>' +
+      '</div>';
+  }).join('');
+}
+
+function showCachedDetails(v) {
+  const tripsSection = document.querySelector('#vd-trips .vd-section-body');
+  const hosSection = document.querySelector('#vd-hos .vd-section-body');
+  const dvirsSection = document.querySelector('#vd-dvirs .vd-section-body');
+  if (tripsSection) tripsSection.innerHTML = renderTripsHTML(v.trips);
+  if (hosSection) hosSection.innerHTML = renderHOSHTML(v.hosData, v.driverId);
+  if (dvirsSection) dvirsSection.innerHTML = renderDVIRsHTML(v.dvirs);
+  // Safety events still loaded live (no cached data)
+  loadSafetyEvents(v);
+}
+
+function refreshDetailPanel() {
+  const v = dashVehicles.find(x => x.id === selectedVehicleId);
+  if (!v) return;
+  // Show spinners
+  ['#vd-trips', '#vd-hos', '#vd-safety', '#vd-dvirs'].forEach(sel => {
+    const body = document.querySelector(sel + ' .vd-section-body');
+    if (body) body.innerHTML = '<div class="vd-loading"><div class="vd-spinner"></div></div>';
+  });
+  loadTrips(v);
+  loadHOS(v);
+  loadSafetyEvents(v);
+  loadDVIRs(v);
 }
 
 async function loadTrips(v) {

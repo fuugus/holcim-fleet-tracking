@@ -1463,6 +1463,7 @@ function renderDashMap() {
 
   if (dashMapReady) {
     updateMapData();
+    resetMapView();
   }
 }
 
@@ -1600,7 +1601,17 @@ function updateMapData() {
     features,
   });
 
-  if (coords.length > 0 && !selectedVehicleId) {
+}
+
+function resetMapView() {
+  if (dashMap) dashMap.flyTo({ center: [8.2, 46.85], zoom: 7, duration: 800 });
+}
+
+function fitMapToVehicles() {
+  const vehicles = getFilteredVehicles();
+  const coords = [];
+  vehicles.forEach(v => { if (v.lat != null && v.lng != null) coords.push([v.lng, v.lat]); });
+  if (coords.length > 0 && dashMap) {
     const bounds = coords.reduce((b, c) => b.extend(c), new maplibregl.LngLatBounds(coords[0], coords[0]));
     dashMap.fitBounds(bounds, { padding: 30, maxZoom: 14 });
   }
@@ -1615,7 +1626,8 @@ function escapeHtml(str) {
 // Dashboard search — update both table and map live
 document.getElementById('dash-search').addEventListener('input', () => {
   renderDashTable();
-  renderDashMap();
+  if (dashMapReady) updateMapData();
+  fitMapToVehicles();
 });
 
 
@@ -2016,6 +2028,7 @@ function deselectVehicle() {
     setTimeout(() => {
       dashMap.resize();
       updateMapData();
+      resetMapView();
     }, 150);
   }
 }

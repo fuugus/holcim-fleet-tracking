@@ -918,7 +918,7 @@
 
     <div class="dash-toolbar">
       <input type="text" id="dash-search" placeholder="Filter vehicles..." autocomplete="off" />
-      <button class="refresh-btn" onclick="loadDashboard()">Refresh</button>
+      <button class="refresh-btn" onclick="loadDashboard(true)">Refresh</button>
       <span class="dash-status" id="dash-status"></span>
     </div>
 
@@ -1072,7 +1072,23 @@ async function fetchJson(endpoint, params = {}) {
   return payload.data || payload;
 }
 
-async function loadDashboard() {
+let dashCacheTimestamp = null;
+let dashAgeInterval = null;
+function updateDashAge() {
+  if (!dashCacheTimestamp) return;
+  const el = document.getElementById('dash-status');
+  const secs = Math.max(0, Math.floor((Date.now() - new Date(dashCacheTimestamp).getTime()) / 1000));
+  let ageText;
+  if (secs < 60) ageText = secs + 's ago';
+  else {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    ageText = m + 'm ' + (s < 10 ? '0' : '') + s + 's ago';
+  }
+  el.textContent = 'Updated ' + ageText;
+}
+
+async function loadDashboard(forceRefresh) {
   const loading = document.getElementById('dash-loading');
   const content = document.getElementById('dash-content');
   const error = document.getElementById('dash-error');
@@ -1083,66 +1099,14 @@ async function loadDashboard() {
   deselectVehicle();
 
   try {
-    const [vehiclesRes, statsRes, locationsRes] = await Promise.all([
-      fetchJson('/fleet/vehicles'),
-      fetchJson('/fleet/vehicles/stats', { types: 'engineStates' }),
-      fetchJson('/fleet/vehicles/locations'),
-    ]);
+    const url = forceRefresh ? '/api/dashboard?refresh=true' : '/api/dashboard';
+    const res = await fetch(url);
+    if (res.status === 503) throw new Error('Server cache not ready yet — try again in a moment');
+    if (!res.ok) throw new Error('Dashboard request failed: ' + res.status);
+    const payload = await res.json();
 
-    const vehiclesList = vehiclesRes.data || [];
-    const statsList = statsRes.data || [];
-    const locationsList = locationsRes.data || [];
-
-    // Index by vehicle ID
-    const statsMap = {};
-    statsList.forEach(s => {
-      const id = s.id;
-      const engineStates = s.engineState || s.engineStates || [];
-      const latest = Array.isArray(engineStates) ? engineStates[0] : engineStates;
-      statsMap[id] = {
-        state: latest ? (latest.value || '').toUpperCase() : null,
-        time: latest ? latest.time : null,
-      };
-    });
-
-    const locMap = {};
-    locationsList.forEach(l => {
-      const id = l.id;
-      const loc = l.location || {};
-      locMap[id] = {
-        lat: loc.latitude,
-        lng: loc.longitude,
-        speed: loc.speedMilesPerHour || loc.speed || 0,
-        address: (loc.reverseGeo && loc.reverseGeo.formattedLocation) || '',
-        time: loc.time || null,
-      };
-    });
-
-    // Merge
-    dashVehicles = vehiclesList.map(v => {
-      const id = v.id;
-      const stat = statsMap[id] || {};
-      const loc = locMap[id] || {};
-      const driver = v.staticAssignedDriver;
-      return {
-        id,
-        name: v.name || '--',
-        plate: v.licensePlate || '--',
-        make: v.make || '',
-        model: v.model || '',
-        makeModel: [v.make, v.model].filter(Boolean).join(' ') || '--',
-        driverId: driver ? driver.id : null,
-        driver: driver ? driver.name || (driver.firstName || '') + ' ' + (driver.lastName || '') : '--',
-        status: stat.state === 'ON' ? 'Running' : stat.state === 'OFF' ? 'Stopped' : 'Unknown',
-        statusRaw: stat.state || '',
-        engineTime: stat.time || null,
-        lat: loc.lat,
-        lng: loc.lng,
-        location: loc.address || '--',
-        locTime: loc.time || null,
-      };
-    });
-
+    dashVehicles = payload.data || [];
+    dashCacheTimestamp = payload.timestamp;
     // Update summary
     const running = dashVehicles.filter(v => v.status === 'Running').length;
     const stopped = dashVehicles.filter(v => v.status === 'Stopped').length;
@@ -1152,8 +1116,7 @@ async function loadDashboard() {
     document.getElementById('sc-stopped').textContent = stopped;
     document.getElementById('sc-unknown').textContent = unknown;
 
-    document.getElementById('dash-status').textContent =
-      'Updated ' + new Date().toLocaleTimeString();
+    updateDashAge();
 
     loading.style.display = 'none';
     content.style.display = '';
@@ -1167,6 +1130,23 @@ async function loadDashboard() {
     document.getElementById('dash-error-msg').textContent = err.message;
   }
 }
+
+// Live data-age counter
+if (!dashAgeInterval) {
+  dashAgeInterval = setInterval(updateDashAge, 1000);
+}
+
+// Poll server timestamp every 5s — auto-reload when cache is newer than what we have
+setInterval(async () => {
+  try {
+    const res = await fetch('/api/dashboard/timestamp');
+    if (!res.ok) return;
+    const { timestamp } = await res.json();
+    if (timestamp && timestamp !== dashCacheTimestamp) {
+      loadDashboard();
+    }
+  } catch (e) { /* ignore polling errors */ }
+}, 5000);
 
 function getFilteredVehicles() {
   const q = (document.getElementById('dash-search').value || '').toLowerCase();

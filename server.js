@@ -43,6 +43,98 @@ app.use((req, res, next) => {
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 
+// Dashboard cache
+let dashboardCache = { data: null, timestamp: null };
+
+async function refreshDashboardCache() {
+  try {
+    const headers = {
+      Authorization: `Bearer ${API_KEY}`,
+      'Content-Type': 'application/json',
+    };
+
+    const [vehiclesRes, statsRes, locationsRes] = await Promise.all([
+      axios.get(`${BASE_URL}/fleet/vehicles`, { headers }),
+      axios.get(`${BASE_URL}/fleet/vehicles/stats`, { headers, params: { types: 'engineStates' } }),
+      axios.get(`${BASE_URL}/fleet/vehicles/locations`, { headers }),
+    ]);
+
+    const vehiclesList = (vehiclesRes.data.data) || [];
+    const statsList = (statsRes.data.data) || [];
+    const locationsList = (locationsRes.data.data) || [];
+
+    // Index stats by vehicle ID
+    const statsMap = {};
+    statsList.forEach(s => {
+      const engineStates = s.engineState || s.engineStates || [];
+      const latest = Array.isArray(engineStates) ? engineStates[0] : engineStates;
+      statsMap[s.id] = {
+        state: latest ? (latest.value || '').toUpperCase() : null,
+        time: latest ? latest.time : null,
+      };
+    });
+
+    // Index locations by vehicle ID
+    const locMap = {};
+    locationsList.forEach(l => {
+      const loc = l.location || {};
+      locMap[l.id] = {
+        lat: loc.latitude,
+        lng: loc.longitude,
+        speed: loc.speedMilesPerHour || loc.speed || 0,
+        address: (loc.reverseGeo && loc.reverseGeo.formattedLocation) || '',
+        time: loc.time || null,
+      };
+    });
+
+    // Merge into single array
+    const vehicles = vehiclesList.map(v => {
+      const id = v.id;
+      const stat = statsMap[id] || {};
+      const loc = locMap[id] || {};
+      const driver = v.staticAssignedDriver;
+      return {
+        id,
+        name: v.name || '--',
+        plate: v.licensePlate || '--',
+        make: v.make || '',
+        model: v.model || '',
+        makeModel: [v.make, v.model].filter(Boolean).join(' ') || '--',
+        driverId: driver ? driver.id : null,
+        driver: driver ? driver.name || (driver.firstName || '') + ' ' + (driver.lastName || '') : '--',
+        status: stat.state === 'ON' ? 'Running' : stat.state === 'OFF' ? 'Stopped' : 'Unknown',
+        statusRaw: stat.state || '',
+        engineTime: stat.time || null,
+        lat: loc.lat,
+        lng: loc.lng,
+        location: loc.address || '--',
+        locTime: loc.time || null,
+      };
+    });
+
+    dashboardCache = { data: vehicles, timestamp: new Date().toISOString() };
+    console.log(`[cache] Dashboard refreshed: ${vehicles.length} vehicles at ${dashboardCache.timestamp}`);
+  } catch (err) {
+    console.error('[cache] Failed to refresh dashboard:', err.message);
+  }
+}
+
+// Lightweight timestamp check for clients to detect cache updates
+app.get('/api/dashboard/timestamp', (req, res) => {
+  res.json({ timestamp: dashboardCache.timestamp });
+});
+
+// Serve cached dashboard data (refresh=true triggers a fresh Samsara fetch first)
+app.get('/api/dashboard', async (req, res) => {
+  if (req.query.refresh === 'true') {
+    await refreshDashboardCache();
+  }
+  if (!dashboardCache.data) {
+    return res.status(503).json({ error: 'Dashboard cache not ready yet' });
+  }
+  res.json({ data: dashboardCache.data, timestamp: dashboardCache.timestamp });
+});
+
 // Proxy all requests to Samsara
 app.get('/api/proxy', async (req, res) => {
   const endpoint = req.query.endpoint;
@@ -84,4 +176,8 @@ app.get('/api/proxy', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`\nHolcim Fleet Tracking — Samsara API Explorer`);
   console.log(`Running at: http://localhost:${PORT}\n`);
+
+  // Initial cache fetch + refresh every 60s
+  refreshDashboardCache();
+  setInterval(refreshDashboardCache, 60000);
 });

@@ -2031,7 +2031,13 @@ function showDetailPanel(v) {
       </div>
     </div>
   `;
-  setTimeout(() => dashMap && dashMap.resize(), 100);
+  setTimeout(() => {
+    if (!dashMap) return;
+    dashMap.resize();
+    if (v.lat != null && v.lng != null) {
+      dashMap.setCenter([v.lng, v.lat]);
+    }
+  }, 100);
 }
 
 function formatDuration(ms) {

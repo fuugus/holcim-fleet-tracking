@@ -2202,7 +2202,7 @@ function showCachedDetails(v) {
   const hosSection = document.querySelector('#vd-hos .vd-section-body');
   const dvirsSection = document.querySelector('#vd-dvirs .vd-section-body');
   if (tripsSection) tripsSection.innerHTML = renderTripsHTML(v.trips);
-  if (hosSection) hosSection.innerHTML = renderHOSHTML(v.hosData, v.driverId);
+  if (hosSection) hosSection.innerHTML = renderHOSHTML(v.hosData, v.currentDriverId || v.driverId);
   if (dvirsSection) dvirsSection.innerHTML = renderDVIRsHTML(v.dvirs);
   // Safety events still loaded live (no cached data)
   loadSafetyEvents(v);
@@ -2251,19 +2251,20 @@ async function loadHOS(v) {
   const section = document.querySelector('#vd-hos .vd-section-body');
   if (!section) return;
   const capturedId = selectedVehicleId;
-  if (!v.driverId) {
+  const hosDriverId = v.currentDriverId || v.driverId;
+  if (!hosDriverId) {
     section.innerHTML = '<div class="vd-empty">No assigned driver</div>';
     return;
   }
   try {
-    const data = await fetchJson('/fleet/hos/clocks', { driverIds: v.driverId });
+    const data = await fetchJson('/fleet/hos/clocks', { driverIds: hosDriverId });
     if (selectedVehicleId !== capturedId) return;
     const clocks = data.data || data.clocks || (Array.isArray(data) ? data : []);
     if (clocks.length === 0) {
       section.innerHTML = '<div class="vd-empty">No HOS data available</div>';
       return;
     }
-    const clock = clocks.find(c => c.driver && c.driver.id === v.driverId) || clocks[0];
+    const clock = clocks.find(c => c.driver && c.driver.id === hosDriverId) || clocks[0];
     const dutyStatus = clock.currentDutyStatus || clock.dutyStatus || {};
     const statusName = dutyStatus.hosStatusType || dutyStatus.statusName || dutyStatus.status || '--';
     const statusLabel = statusName.replace(/([A-Z])/g, ' $1').trim();

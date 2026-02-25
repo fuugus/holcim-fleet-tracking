@@ -76,7 +76,16 @@ async function refreshDetailCache(fullRefresh) {
 
   try {
     // Step 1: Drivers + HOS + DVIRs in parallel (bulk endpoints)
-    const driverIds = [...new Set(dashboardCache.data.filter(v => v.driverId).map(v => v.driverId))];
+    // Collect driver IDs from both static assignments and latest trips
+    const driverIdSet = new Set();
+    dashboardCache.data.forEach(v => {
+      if (v.driverId) driverIdSet.add(v.driverId);
+      const trip = detailCache.trips[v.id];
+      if (trip && trip.items.length > 0 && trip.items[0].driverId > 0) {
+        driverIdSet.add(String(trip.items[0].driverId));
+      }
+    });
+    const driverIds = [...driverIdSet];
     const now = Date.now();
     const ninetyAgo = now - 90 * 86400000;
     const oneEightyAgo = now - 180 * 86400000;
@@ -279,7 +288,6 @@ app.get('/api/dashboard', async (req, res) => {
   // Merge detail indicators into vehicle data
   const data = dashboardCache.data.map(v => {
     const trip = detailCache.trips[v.id];
-    const hos = v.driverId ? detailCache.hos[v.driverId] : null;
     const dvir = detailCache.dvirs[v.id];
 
     // Resolve current driver from latest trip
@@ -300,6 +308,9 @@ app.get('/api/dashboard', async (req, res) => {
         });
       }
     }
+
+    const hosDriverId = currentDriverId || v.driverId;
+    const hos = hosDriverId ? detailCache.hos[hosDriverId] : null;
 
     return {
       ...v,

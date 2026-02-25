@@ -1502,7 +1502,10 @@ function setupMapSources() {
     clusterMaxZoom: 14,
     clusterRadius: 40,
   });
+  setupMapLayers();
+}
 
+function setupMapLayers() {
   // Cluster circles
   dashMap.addLayer({
     id: 'clusters',
@@ -1555,10 +1558,10 @@ function setupMapSources() {
     source: 'vehicles',
     filter: ['!', ['has', 'point_count']],
     paint: {
-      'circle-color': ['get', 'statusColor'],
-      'circle-radius': 5,
-      'circle-stroke-width': 1.5,
-      'circle-stroke-color': 'rgba(255,255,255,0.6)',
+      'circle-color': ['case', ['==', ['get', 'selected'], 1], '#ffffff', ['get', 'statusColor']],
+      'circle-radius': ['case', ['==', ['get', 'selected'], 1], 8, 5],
+      'circle-stroke-width': ['case', ['==', ['get', 'selected'], 1], 3, 1.5],
+      'circle-stroke-color': ['case', ['==', ['get', 'selected'], 1], 'rgba(255,255,255,0.3)', 'rgba(255,255,255,0.6)'],
     },
   });
 }
@@ -1579,11 +1582,13 @@ function updateMapData() {
       type: 'Feature',
       geometry: { type: 'Point', coordinates: [v.lng, v.lat] },
       properties: {
+        id: v.id,
         name: v.name,
         status: v.status,
         statusColor: color,
         driver: v.driver,
         location: v.location,
+        selected: v.id === selectedVehicleId ? 1 : 0,
       },
     });
 
@@ -1595,7 +1600,7 @@ function updateMapData() {
     features,
   });
 
-  if (coords.length > 0) {
+  if (coords.length > 0 && !selectedVehicleId) {
     const bounds = coords.reduce((b, c) => b.extend(c), new maplibregl.LngLatBounds(coords[0], coords[0]));
     dashMap.fitBounds(bounds, { padding: 30, maxZoom: 14 });
   }
@@ -1962,12 +1967,27 @@ function selectVehicle(id) {
     tr.classList.toggle('selected', tr.dataset.vehicleId === id);
   });
 
+  // Disable clustering for clear single-vehicle view
+  if (dashMap && dashMapReady) {
+    dashMap.getSource('vehicles').setData({ type: 'FeatureCollection', features: [] });
+    dashMap.removeLayer('unclustered-point');
+    dashMap.removeLayer('cluster-count');
+    dashMap.removeLayer('clusters');
+    dashMap.removeSource('vehicles');
+    dashMap.addSource('vehicles', {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: [] },
+      cluster: false,
+    });
+    setupMapLayers();
+    updateMapData();
+  }
+
   flyToVehicle(v);
   showDetailPanel(v);
   loadTrips(v);
   loadHOS(v);
   loadSafetyEvents(v);
-  loadDVIRs(v);
 }
 
 function deselectVehicle() {
@@ -1977,7 +1997,27 @@ function deselectVehicle() {
   const panel = document.getElementById('vehicle-detail');
   panel.style.display = 'none';
   document.querySelector('.dash-split-right').classList.remove('detail-open');
-  if (dashMap) setTimeout(() => dashMap.resize(), 100);
+
+  // Re-enable clustering and zoom out to show all vehicles
+  if (dashMap && dashMapReady) {
+    dashMap.getSource('vehicles').setData({ type: 'FeatureCollection', features: [] });
+    dashMap.removeLayer('unclustered-point');
+    dashMap.removeLayer('cluster-count');
+    dashMap.removeLayer('clusters');
+    dashMap.removeSource('vehicles');
+    dashMap.addSource('vehicles', {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: [] },
+      cluster: true,
+      clusterMaxZoom: 14,
+      clusterRadius: 40,
+    });
+    setupMapLayers();
+    setTimeout(() => {
+      dashMap.resize();
+      updateMapData();
+    }, 150);
+  }
 }
 
 function flyToVehicle(v) {
@@ -2027,10 +2067,6 @@ function showDetailPanel(v) {
       </div>
       <div class="vd-section" id="vd-safety">
         <div class="vd-section-title">Safety Events (30 days)</div>
-        <div class="vd-section-body"><div class="vd-loading"><div class="vd-spinner"></div></div></div>
-      </div>
-      <div class="vd-section" id="vd-dvirs">
-        <div class="vd-section-title">DVIRs</div>
         <div class="vd-section-body"><div class="vd-loading"><div class="vd-spinner"></div></div></div>
       </div>
     </div>

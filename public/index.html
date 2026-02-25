@@ -4,10 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Holcim — Fleet Tracking</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -650,63 +648,26 @@
     }
     #dash-map {
       width: 100%; height: 100%;
-      background: #0C0C0C;
     }
-    .leaflet-container { background: #0C0C0C !important; }
-    .leaflet-control-zoom, .leaflet-control-attribution { display: none !important; }
+    .maplibregl-ctrl-attrib, .maplibregl-ctrl-logo { display: none !important; }
 
-    /* Leaflet popup styling */
-    .leaflet-popup-content-wrapper {
+    /* MapLibre popup styling */
+    .maplibregl-popup-content {
       background: var(--card-bg) !important;
       color: var(--text) !important;
       border: 1px solid var(--card-border) !important;
       border-radius: 8px !important;
       box-shadow: 0 4px 24px rgba(0,0,0,.4) !important;
+      padding: 10px 14px !important;
+      font-size: 12px;
+      line-height: 1.5;
     }
-    .leaflet-popup-tip { background: var(--card-bg) !important; }
-    .leaflet-popup-content { font-size: 12px; line-height: 1.5; }
-    .leaflet-popup-content strong { color: var(--accent-hover); }
-
-    /* Marker cluster styling */
-    .marker-cluster {
-      border-radius: 50% !important;
-      border: none !important;
-    }
-    .marker-cluster div {
-      color: #fff !important;
-      border-radius: 50% !important;
-      font-size: 11px !important;
-      font-weight: 700 !important;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
-      display: flex !important;
-      align-items: center !important;
-      justify-content: center !important;
-    }
-    .marker-cluster-small {
-      width: 26px !important; height: 26px !important;
-      background: rgba(96,165,250,0.2) !important;
-    }
-    .marker-cluster-small div {
-      width: 20px !important; height: 20px !important;
-      background: rgba(96,165,250,0.75) !important;
-      font-size: 10px !important;
-    }
-    .marker-cluster-medium {
-      width: 32px !important; height: 32px !important;
-      background: rgba(99,102,241,0.2) !important;
-    }
-    .marker-cluster-medium div {
-      width: 24px !important; height: 24px !important;
-      background: rgba(99,102,241,0.75) !important;
-    }
-    .marker-cluster-large {
-      width: 38px !important; height: 38px !important;
-      background: rgba(139,92,246,0.2) !important;
-    }
-    .marker-cluster-large div {
-      width: 30px !important; height: 30px !important;
-      background: rgba(139,92,246,0.75) !important;
-    }
+    .maplibregl-popup-content strong { color: var(--accent-hover); }
+    .maplibregl-popup-tip { border-top-color: var(--card-bg) !important; }
+    .maplibregl-popup-anchor-bottom .maplibregl-popup-tip { border-top-color: var(--card-bg) !important; }
+    .maplibregl-popup-anchor-top .maplibregl-popup-tip { border-bottom-color: var(--card-bg) !important; }
+    .maplibregl-popup-close-button { color: var(--text-dim); font-size: 16px; }
+    .maplibregl-popup-close-button:hover { color: var(--text); }
 
     /* Dashboard error state */
     .dash-error {
@@ -886,7 +847,7 @@ let dashVehicles = [];
 let dashSortCol = 'name';
 let dashSortAsc = true;
 let dashMap = null;
-let dashClusterGroup = null;
+let dashMapReady = false;
 
 const DASH_COLUMNS = [
   { key: 'name',      label: 'Vehicle Name' },
@@ -1123,34 +1084,277 @@ function renderDashTable() {
   });
 }
 
-function renderDashMap() {
-  if (!dashMap) {
-    dashMap = L.map('dash-map', {
-      zoomControl: false,
-      attributionControl: false,
-    }).setView([46.85, 8.2], 8);
+// Dark style: fetch OpenFreeMap positron and override colors
+async function buildDarkStyle() {
+  const style = await fetch('https://tiles.openfreemap.org/styles/positron').then(r => r.json());
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      maxZoom: 19,
-      subdomains: 'abcd',
-    }).addTo(dashMap);
+  // Color overrides for dark theme
+  const colorMap = {
+    // Backgrounds / land
+    'rgb(242,243,240)': '#0f1117',
+    'rgb(242, 243, 240)': '#0f1117',
+    '#f2f3f0': '#0f1117',
+    // Water
+    'rgb(194, 200, 202)': '#1A2030',
+    'rgb(194,200,202)': '#1A2030',
+    '#c2c8ca': '#1A2030',
+    // Parks / green areas
+    'rgb(230, 233, 229)': '#141a26',
+    'rgb(230,233,229)': '#141a26',
+    '#e6e9e5': '#141a26',
+    // Buildings
+    'rgb(234, 234, 229)': '#161b27',
+    'rgb(234,234,229)': '#161b27',
+    '#eaeae5': '#161b27',
+    // Landcover
+    'rgb(220, 224, 220)': '#131925',
+    'rgb(220,224,220)': '#131925',
+    'rgb(202,207,204)': '#151c28',
+    'rgb(202, 207, 204)': '#151c28',
+  };
 
+  function recolor(val) {
+    if (typeof val === 'string') {
+      return colorMap[val] || colorMap[val.toLowerCase()] || val;
+    }
+    return val;
   }
 
-  // Remove previous cluster group
-  if (dashClusterGroup) {
-    dashMap.removeLayer(dashClusterGroup);
+  function walkPaint(obj) {
+    if (!obj || typeof obj !== 'object') return obj;
+    if (Array.isArray(obj)) return obj.map(walkPaint);
+    const out = {};
+    for (const [k, v] of Object.entries(obj)) {
+      out[k] = typeof v === 'string' ? recolor(v) : walkPaint(v);
+    }
+    return out;
   }
 
-  dashClusterGroup = L.markerClusterGroup({
-    maxClusterRadius: 40,
-    spiderfyOnMaxZoom: true,
-    showCoverageOnHover: false,
-    zoomToBoundsOnClick: true,
+  style.layers = style.layers.map(layer => {
+    const l = { ...layer };
+
+    // Remove highway shield labels (A2, A14 boxes etc)
+    if (l.id && (l.id.includes('shield') || l.id.includes('motorway-ref') || l.id.includes('road_label') || l.id.includes('highway-name') || l.id.includes('highway_name') || l.id.includes('road-ref') || l.id.includes('road_ref'))) {
+      l.layout = { ...l.layout, visibility: 'none' };
+    }
+    if (l.layout && l.layout['icon-image'] && l.layout['text-field']) {
+      const iconImg = l.layout['icon-image'];
+      if (typeof iconImg === 'string' && (iconImg.includes('shield') || iconImg.includes('motorway') || iconImg.includes('road'))) {
+        l.layout = { ...l.layout, visibility: 'none' };
+      }
+    }
+
+    // Restyle text labels
+    if (l.layout && l.layout['text-field']) {
+      l.paint = { ...l.paint };
+      l.paint['text-color'] = l.paint['text-color'] || '#8899aa';
+      if (typeof l.paint['text-color'] === 'string' && !l.paint['text-color'].startsWith('#8')) {
+        l.paint['text-color'] = '#7c8fa8';
+      }
+      l.paint['text-halo-color'] = 'rgba(15,17,23,0.8)';
+      l.paint['text-halo-width'] = 1.5;
+    }
+
+    // Road lines — uniform color for all road types
+    if (l.type === 'line' && l.id && (l.id.includes('road') || l.id.includes('highway') || l.id.includes('tunnel') || l.id.includes('bridge') || l.id.includes('path') || l.id.includes('rail') || l.id.includes('street') || l.id.includes('motorway') || l.id.includes('trunk') || l.id.includes('link'))) {
+      l.paint = { ...l.paint };
+      l.paint['line-color'] = '#2a3348';
+      l.paint['line-opacity'] = 0.85;
+    }
+
+    // Aeroways (runways, taxiways, aprons)
+    if (l.id && (l.id.includes('aero') || l.id.includes('runway') || l.id.includes('taxiway') || l.id.includes('apron'))) {
+      l.paint = { ...l.paint };
+      if (l.type === 'fill') {
+        l.paint['fill-color'] = '#1a1e2a';
+        l.paint['fill-opacity'] = 0.7;
+      }
+      if (l.type === 'line') {
+        l.paint['line-color'] = '#252a38';
+        l.paint['line-opacity'] = 0.7;
+      }
+    }
+
+    // Waterways (rivers, streams, canals) — same blue as lakes
+    if (l.type === 'line' && l.id && (l.id.includes('water') || l.id.includes('river') || l.id.includes('stream') || l.id.includes('canal'))) {
+      l.paint = { ...l.paint };
+      l.paint['line-color'] = '#1A2030';
+      l.paint['line-opacity'] = 1;
+    }
+
+    // Catch-all: any remaining line layers with bright colors
+    if (l.type === 'line' && l.paint && l.paint['line-color']) {
+      const lc = l.paint['line-color'];
+      if (typeof lc === 'string' && (lc.includes('255') || lc.includes('fff') || lc.includes('FFF') || lc === '#fff' || lc === '#ffffff' || lc === 'white' || lc.includes('rgb(2'))) {
+        l.paint = { ...l.paint };
+        l.paint['line-color'] = '#2a3348';
+      }
+    }
+
+    // Boundary lines
+    if (l.type === 'line' && l.id && l.id.includes('boundary')) {
+      l.paint = { ...l.paint };
+      l.paint['line-color'] = '#2a3550';
+      l.paint['line-opacity'] = 0.6;
+    }
+
+    // Landuse / landcover fill areas — subtle warm grey
+    if (l.type === 'fill' && l.id && (l.id.includes('landuse') || l.id.includes('landcover'))) {
+      l.paint = { ...l.paint };
+      l.paint['fill-color'] = '#1f2330';
+      l.paint['fill-opacity'] = 0.5;
+    }
+
+    // Buildings — filled lighter grey
+    if (l.type === 'fill' && l.id && l.id.includes('building')) {
+      l.paint = { ...l.paint };
+      l.paint['fill-color'] = '#2a2e3a';
+      l.paint['fill-opacity'] = 0.85;
+      l.paint['fill-outline-color'] = '#333845';
+    }
+
+    // Recolor fill layers (everything else)
+    if (l.paint) {
+      l.paint = walkPaint(l.paint);
+    }
+
+    return l;
   });
 
-  const bounds = [];
+  return style;
+}
+
+function renderDashMap() {
+  if (!dashMap) {
+    buildDarkStyle().then(style => {
+      dashMap = new maplibregl.Map({
+        container: 'dash-map',
+        style: style,
+        center: [8.2, 46.85],
+        zoom: 7,
+        attributionControl: false,
+      });
+
+      dashMap.on('load', () => {
+        dashMapReady = true;
+        setupMapSources();
+        updateMapData();
+      });
+
+      // Cluster click: zoom in
+      dashMap.on('click', 'clusters', (e) => {
+        const features = dashMap.queryRenderedFeatures(e.point, { layers: ['clusters'] });
+        const clusterId = features[0].properties.cluster_id;
+        dashMap.getSource('vehicles').getClusterExpansionZoom(clusterId, (err, zoom) => {
+          if (err) return;
+          dashMap.easeTo({ center: features[0].geometry.coordinates, zoom: zoom + 1 });
+        });
+      });
+
+      // Vehicle click: show popup
+      dashMap.on('click', 'unclustered-point', (e) => {
+        const f = e.features[0];
+        const p = f.properties;
+        const coords = f.geometry.coordinates.slice();
+        const color = p.statusColor;
+        new maplibregl.Popup({ offset: 8 })
+          .setLngLat(coords)
+          .setHTML(
+            '<strong>' + escapeHtml(p.name) + '</strong><br>' +
+            'Status: <span style="color:' + color + ';font-weight:700;">' + escapeHtml(p.status) + '</span><br>' +
+            'Driver: ' + escapeHtml(p.driver) + '<br>' +
+            'Location: ' + escapeHtml(p.location)
+          )
+          .addTo(dashMap);
+      });
+
+      // Cursor styles
+      dashMap.on('mouseenter', 'clusters', () => { dashMap.getCanvas().style.cursor = 'pointer'; });
+      dashMap.on('mouseleave', 'clusters', () => { dashMap.getCanvas().style.cursor = ''; });
+      dashMap.on('mouseenter', 'unclustered-point', () => { dashMap.getCanvas().style.cursor = 'pointer'; });
+      dashMap.on('mouseleave', 'unclustered-point', () => { dashMap.getCanvas().style.cursor = ''; });
+    });
+    return;
+  }
+
+  if (dashMapReady) {
+    updateMapData();
+  }
+}
+
+function setupMapSources() {
+  dashMap.addSource('vehicles', {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features: [] },
+    cluster: true,
+    clusterMaxZoom: 14,
+    clusterRadius: 40,
+  });
+
+  // Cluster circles
+  dashMap.addLayer({
+    id: 'clusters',
+    type: 'circle',
+    source: 'vehicles',
+    filter: ['has', 'point_count'],
+    paint: {
+      'circle-color': [
+        'step', ['get', 'point_count'],
+        'rgba(96,165,250,0.75)', 10,
+        'rgba(99,102,241,0.75)', 30,
+        'rgba(139,92,246,0.75)'
+      ],
+      'circle-radius': [
+        'step', ['get', 'point_count'],
+        12, 10,
+        16, 30,
+        20
+      ],
+      'circle-stroke-width': 3,
+      'circle-stroke-color': [
+        'step', ['get', 'point_count'],
+        'rgba(96,165,250,0.2)', 10,
+        'rgba(99,102,241,0.2)', 30,
+        'rgba(139,92,246,0.2)'
+      ],
+    },
+  });
+
+  // Cluster count labels
+  dashMap.addLayer({
+    id: 'cluster-count',
+    type: 'symbol',
+    source: 'vehicles',
+    filter: ['has', 'point_count'],
+    layout: {
+      'text-field': '{point_count_abbreviated}',
+      'text-size': 11,
+      'text-font': ['Noto Sans Regular'],
+    },
+    paint: {
+      'text-color': '#ffffff',
+    },
+  });
+
+  // Individual vehicle dots
+  dashMap.addLayer({
+    id: 'unclustered-point',
+    type: 'circle',
+    source: 'vehicles',
+    filter: ['!', ['has', 'point_count']],
+    paint: {
+      'circle-color': ['get', 'statusColor'],
+      'circle-radius': 5,
+      'circle-stroke-width': 1.5,
+      'circle-stroke-color': 'rgba(255,255,255,0.6)',
+    },
+  });
+}
+
+function updateMapData() {
   const vehicles = getFilteredVehicles();
+  const features = [];
+  const coords = [];
 
   vehicles.forEach(v => {
     if (v.lat == null || v.lng == null) return;
@@ -1159,34 +1363,30 @@ function renderDashMap() {
                 : v.status === 'Stopped' ? '#818cf8'
                 : '#64748b';
 
-    const icon = L.divIcon({
-      className: '',
-      html: '<div style="width:8px;height:8px;background:' + color +
-            ';border:1.5px solid rgba(255,255,255,.6);border-radius:50%;box-shadow:0 0 5px ' + color + ';"></div>',
-      iconSize: [8, 8],
-      iconAnchor: [4, 4],
-      popupAnchor: [0, -6],
+    features.push({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [v.lng, v.lat] },
+      properties: {
+        name: v.name,
+        status: v.status,
+        statusColor: color,
+        driver: v.driver,
+        location: v.location,
+      },
     });
 
-    const marker = L.marker([v.lat, v.lng], { icon });
-    marker.bindPopup(
-      '<strong>' + escapeHtml(v.name) + '</strong><br>' +
-      'Status: <span style="color:' + color + ';font-weight:700;">' + v.status + '</span><br>' +
-      'Driver: ' + escapeHtml(v.driver) + '<br>' +
-      'Location: ' + escapeHtml(v.location)
-    );
-
-    dashClusterGroup.addLayer(marker);
-    bounds.push([v.lat, v.lng]);
+    coords.push([v.lng, v.lat]);
   });
 
-  dashMap.addLayer(dashClusterGroup);
+  dashMap.getSource('vehicles').setData({
+    type: 'FeatureCollection',
+    features,
+  });
 
-  if (bounds.length > 0) {
-    dashMap.fitBounds(bounds, { padding: [30, 30] });
+  if (coords.length > 0) {
+    const bounds = coords.reduce((b, c) => b.extend(c), new maplibregl.LngLatBounds(coords[0], coords[0]));
+    dashMap.fitBounds(bounds, { padding: 30, maxZoom: 14 });
   }
-
-  setTimeout(() => dashMap.invalidateSize(), 100);
 }
 
 function escapeHtml(str) {

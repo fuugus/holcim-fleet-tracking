@@ -46,8 +46,9 @@ app.use(express.json());
 // Dashboard cache
 let dashboardCache = { data: null, timestamp: null };
 
-// Detail cache (trips, HOS, DVIRs)
+// Detail cache (trips, HOS, DVIRs, drivers)
 let detailCache = { trips: {}, hos: {}, dvirs: {} };
+let driverMap = {}; // driverId -> { id, name }
 let prevEngineTime = {};
 let isFirstDetailRun = true;
 
@@ -74,13 +75,27 @@ async function refreshDetailCache(fullRefresh) {
   const start = Date.now();
 
   try {
-    // Step 1: HOS + DVIRs in parallel (bulk endpoints)
+    // Step 1: Drivers + HOS + DVIRs in parallel (bulk endpoints)
     const driverIds = [...new Set(dashboardCache.data.filter(v => v.driverId).map(v => v.driverId))];
     const now = Date.now();
     const ninetyAgo = now - 90 * 86400000;
     const oneEightyAgo = now - 180 * 86400000;
 
     const bulkPromises = [];
+
+    // Drivers — fetch all driver names (only on first run or full refresh)
+    if (fullRefresh || Object.keys(driverMap).length === 0) {
+      bulkPromises.push(
+        axios.get(`${BASE_URL}/fleet/drivers`, { headers: samsaraHeaders })
+          .then(res => {
+            const drivers = (res.data.data) || [];
+            drivers.forEach(d => { driverMap[d.id] = { id: d.id, name: d.name }; });
+            return drivers.length;
+          }).catch(() => 0)
+      );
+    } else {
+      bulkPromises.push(Promise.resolve(Object.keys(driverMap).length));
+    }
 
     // HOS — single bulk call
     if (driverIds.length > 0) {
@@ -133,7 +148,8 @@ async function refreshDetailCache(fullRefresh) {
       })
     );
 
-    const [hosCount, dvirCount] = await Promise.all(bulkPromises);
+    const bulkResults = await Promise.all(bulkPromises);
+    const driverCount = bulkResults[0] || 0;
 
     // Step 2: Trips (per-vehicle with concurrency limit)
     const weekAgo = now - 7 * 86400000;
@@ -168,7 +184,7 @@ async function refreshDetailCache(fullRefresh) {
     dashboardCache.data.forEach(v => { prevEngineTime[v.id] = v.engineTime; });
 
     const elapsed = Date.now() - start;
-    console.log(`[detail] HOS: ${hosCount || 0}, DVIRs: ${dvirCount || 0}, Trips: ${vehiclesToFetch.length}/${dashboardCache.data.length} fetched (${elapsed}ms)`);
+    console.log(`[detail] Drivers: ${driverCount}, Trips: ${vehiclesToFetch.length}/${dashboardCache.data.length} fetched (${elapsed}ms)`);
   } catch (err) {
     console.error('[detail] Failed to refresh detail cache:', err.message);
   }
@@ -265,15 +281,42 @@ app.get('/api/dashboard', async (req, res) => {
     const trip = detailCache.trips[v.id];
     const hos = v.driverId ? detailCache.hos[v.driverId] : null;
     const dvir = detailCache.dvirs[v.id];
+
+    // Resolve current driver from latest trip
+    let currentDriver = null;
+    let currentDriverId = null;
+    let coDrivers = [];
+    if (trip && trip.items.length > 0) {
+      const latest = trip.items[0];
+      if (latest.driverId && latest.driverId > 0) {
+        currentDriverId = String(latest.driverId);
+        const dm = driverMap[currentDriverId];
+        currentDriver = dm ? dm.name : ('Driver #' + currentDriverId);
+      }
+      if (latest.codriverIds && latest.codriverIds.length > 0) {
+        coDrivers = latest.codriverIds.filter(id => id > 0).map(id => {
+          const dm = driverMap[String(id)];
+          return dm ? dm.name : ('Driver #' + id);
+        });
+      }
+    }
+
     return {
       ...v,
       tripCount: trip ? trip.count : 0,
-      trips: trip ? trip.items.slice(0, 5) : [],
+      trips: trip ? trip.items.slice(0, 5).map(t => {
+        const tDriverId = t.driverId && t.driverId > 0 ? String(t.driverId) : null;
+        const dm = tDriverId ? driverMap[tDriverId] : null;
+        return { ...t, driverName: dm ? dm.name : null };
+      }) : [],
       hosStatus: hos ? hos.statusType : null,
       hasHOS: !!(hos && hos.statusType),
       hosData: hos ? hos.raw : null,
       dvirCount: dvir ? dvir.count : 0,
       dvirs: dvir ? dvir.items.slice(0, 5) : [],
+      currentDriver,
+      currentDriverId,
+      coDrivers,
     };
   });
   res.json({ data, timestamp: dashboardCache.timestamp });

@@ -627,6 +627,7 @@
       text-overflow: ellipsis;
     }
     .vehicle-table .vt-name { color: var(--text); font-weight: 500; }
+    .vehicle-table .vt-info { font-size: 11px; color: var(--text-dim); white-space: nowrap; }
     .vehicle-table .vt-badge {
       display: inline-block;
       font-size: 10px;
@@ -1046,6 +1047,7 @@ const DASH_COLUMNS = [
   { key: 'status',    label: 'Status' },
   { key: 'location',  label: 'Location' },
   { key: 'lastUpdate', label: 'Last Update' },
+  { key: 'info',       label: 'Info' },
 ];
 
 function relativeTime(ts) {
@@ -1232,6 +1234,11 @@ function renderDashTable() {
     if (selectedVehicleId === v.id) tr.classList.add('selected');
     tr.addEventListener('click', () => selectVehicle(v.id));
 
+    const infoParts = [];
+    if (v.tripCount > 0) infoParts.push(v.tripCount + ' trip' + (v.tripCount !== 1 ? 's' : ''));
+    if (v.hasHOS) infoParts.push('HOS');
+    if (v.dvirCount > 0) infoParts.push(v.dvirCount + ' DVIR' + (v.dvirCount !== 1 ? 's' : ''));
+
     const cells = [
       { text: v.name,               cls: 'vt-name' },
       { text: v.plate },
@@ -1240,6 +1247,7 @@ function renderDashTable() {
       { text: v.status,             badge: true },
       { text: v.location },
       { text: relativeTime(v.engineTime) },
+      { text: infoParts.join(' · '), cls: 'vt-info' },
     ];
 
     cells.forEach(c => {

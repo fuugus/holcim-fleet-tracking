@@ -651,24 +651,6 @@
     }
     .maplibregl-ctrl-attrib, .maplibregl-ctrl-logo { display: none !important; }
 
-    /* MapLibre popup styling */
-    .maplibregl-popup-content {
-      background: var(--card-bg) !important;
-      color: var(--text) !important;
-      border: 1px solid var(--card-border) !important;
-      border-radius: 8px !important;
-      box-shadow: 0 4px 24px rgba(0,0,0,.4) !important;
-      padding: 10px 14px !important;
-      font-size: 12px;
-      line-height: 1.5;
-    }
-    .maplibregl-popup-content strong { color: var(--accent-hover); }
-    .maplibregl-popup-tip { border-top-color: var(--card-bg) !important; }
-    .maplibregl-popup-anchor-bottom .maplibregl-popup-tip { border-top-color: var(--card-bg) !important; }
-    .maplibregl-popup-anchor-top .maplibregl-popup-tip { border-bottom-color: var(--card-bg) !important; }
-    .maplibregl-popup-close-button { color: var(--text-dim); font-size: 16px; }
-    .maplibregl-popup-close-button:hover { color: var(--text); }
-
     /* Dashboard error state */
     .dash-error {
       flex: 1;
@@ -1098,7 +1080,6 @@ async function loadDashboard() {
   loading.style.display = '';
   content.style.display = 'none';
   error.style.display = 'none';
-  document.querySelectorAll('.maplibregl-popup').forEach(p => p.remove());
   deselectVehicle();
 
   try {
@@ -1464,21 +1445,10 @@ function renderDashMap() {
         });
       });
 
-      // Vehicle click: show popup
+      // Vehicle click: open detail panel
       dashMap.on('click', 'unclustered-point', (e) => {
         const f = e.features[0];
-        const p = f.properties;
-        const coords = f.geometry.coordinates.slice();
-        const color = p.statusColor;
-        new maplibregl.Popup({ offset: 8 })
-          .setLngLat(coords)
-          .setHTML(
-            '<strong>' + escapeHtml(p.name) + '</strong><br>' +
-            'Status: <span style="color:' + color + ';font-weight:700;">' + escapeHtml(p.status) + '</span><br>' +
-            'Driver: ' + escapeHtml(p.driver) + '<br>' +
-            'Location: ' + escapeHtml(p.location)
-          )
-          .addTo(dashMap);
+        if (f.properties.id) selectVehicle(f.properties.id);
       });
 
       // Cursor styles
@@ -2023,8 +1993,6 @@ function deselectVehicle() {
 
 function flyToVehicle(v) {
   if (!dashMap || v.lat == null || v.lng == null) return;
-  // Close any open popups
-  document.querySelectorAll('.maplibregl-popup').forEach(p => p.remove());
   dashMap.flyTo({ center: [v.lng, v.lat], zoom: 14, duration: 1000 });
 }
 
